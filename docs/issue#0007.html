@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Implementation Notes — Issue #0007</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FAF9F6;
+      color: #1a1a1a;
+      padding: 2.5rem 2rem;
+      line-height: 1.7;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 1.375rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .meta { color: #8B8680; font-size: 0.8125rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.375rem;
+      border-bottom: 1px solid #E8E4DE;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot.design { background: #5B8A72; }
+    .dot.deviation { background: #D97757; }
+    .dot.tradeoff { background: #4A6FA5; }
+    .dot.question { background: #D4A843; }
+    .item {
+      background: #FFFFFF;
+      border: 1px solid #E8E4DE;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .item h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.375rem; }
+    .item p { font-size: 0.8125rem; color: #4A4540; margin-bottom: 0.375rem; }
+    .label {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      margin-right: 0.375rem;
+    }
+    .label-design { background: #F5F8F6; color: #5B8A72; border: 1px solid #5B8A72; }
+    .label-deviation { background: #FFF5F0; color: #D97757; border: 1px solid #D97757; }
+    .label-tradeoff { background: #F0F4F8; color: #4A6FA5; border: 1px solid #4A6FA5; }
+    .label-question { background: #FDF8F0; color: #D4A843; border: 1px solid #D4A843; }
+    .none { color: #B0AAA4; font-style: italic; font-size: 0.8125rem; }
+    .footer { text-align: center; margin-top: 2.5rem; color: #B0AAA4; font-size: 0.6875rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Implementation Notes</h1>
+    <p class="meta">Issue <a href="https://github.com/smallnest/agent-wrapper/issues/7">#7</a> &mdash; [#9] PiAgent &mdash; 2026-06-02</p>
+
+    <h2><span class="dot design"></span> Design Decisions</h2>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> Used <code>--mode rpc</code> with JSONL protocol</h3>
+      <p><strong>Ambiguity:</strong> The issue said to research Pi CLI's protocol. Pi supports three modes: text (interactive TUI), json (single-shot), and rpc (interactive JSONL over stdin/stdout).</p>
+      <p><strong>Choice:</strong> Used <code>--mode rpc</code> for full bidirectional JSONL communication. Reused the existing <code>NewJSONRPCScanner</code> from the process package since Pi's JSONL framing is identical to JSON-RPC line-delimited JSON.</p>
+      <p><strong>Rationale:</strong> RPC mode provides the richest event stream (message_update, tool_execution_start/end, turn_end, agent_end) and supports multi-turn interaction. JSON mode is single-shot and doesn't stream. The JSONL framing matches our existing scanner perfectly.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> Single-shot prompt via prompt command</h3>
+      <p><strong>Ambiguity:</strong> Pi's RPC mode supports multiple commands (prompt, steer, follow_up, abort, etc.). It wasn't clear how to map a single <code>Agent.Run()</code> call.</p>
+      <p><strong>Choice:</strong> Each <code>Run()</code> sends exactly one <code>prompt</code> command and reads events until <code>turn_end</code> or <code>agent_end</code>. Stdin is left open (not closed) since the RPC protocol expects the connection to stay alive.</p>
+      <p><strong>Rationale:</strong> Matches the <code>Agent.Run()</code> contract — one call = one turn. The goroutine breaks the scanner loop after receiving <code>turn_end</code>, then <code>proc.Close()</code> handles subprocess cleanup.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> Simplified message passing — extract last user message only</h3>
+      <p><strong>Ambiguity:</strong> The spec's Section 6.3 said "TBD" for Pi message mapping.</p>
+      <p><strong>Choice:</strong> Pi's prompt command takes a single message string. We extract the last user message from the session or use <code>NewMessage.Content</code>. No full history conversion is done.</p>
+      <p><strong>Rationale:</strong> Pi manages its own conversation history internally via session files. We pass <code>--no-session</code> for ephemeral runs, so only the current prompt matters. Full history conversion would require understanding Pi's internal session format, which is an implementation detail.</p>
+    </div>
+
+    <h2><span class="dot deviation"></span> Deviations</h2>
+
+    <div class="item">
+      <h3><span class="label label-deviation">Deviation</span> No full bidirectional message history conversion</h3>
+      <p><strong>Spec said:</strong> <code>pi/convert.go</code> should handle <code>[]Message</code> ↔ Pi native format.</p>
+      <p><strong>Implemented:</strong> <code>convert.go</code> only has <code>messagesToPrompt()</code> which extracts the last user message. No reverse conversion from Pi format to []Message.</p>
+      <p><strong>Why:</strong> Pi's RPC protocol sends the entire conversation state in <code>turn_end</code> events, but parsing that into our Message format requires understanding Pi's internal message schema. For v1, we rely on the orchestrator to accumulate events into Messages. Pi manages its own session state internally.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-deviation">Deviation</span> Tool call arguments not captured during streaming</h3>
+      <p><strong>Spec said:</strong> Tool call events should include <code>ToolInput</code>.</p>
+      <p><strong>Implemented:</strong> Tool calls from <code>tool_execution_start</code> don't include arguments — only toolCallId and toolName. The <code>toolcall_delta</code> events are silently skipped.</p>
+      <p><strong>Why:</strong> Pi streams tool arguments incrementally via <code>toolcall_delta</code> events, similar to OpenAI's incremental tool_calls. Accumulating partial JSON deltas into a complete ToolInput would require a buffering layer. For v1, the tool name and ID are sufficient for the orchestrator to identify tool calls.</p>
+    </div>
+
+    <h2><span class="dot tradeoff"></span> Tradeoffs</h2>
+
+    <div class="item">
+      <h3><span class="label label-tradeoff">Tradeoff</span> Reuse JSONRPCScanner vs. custom JSONL scanner</h3>
+      <p><strong>Alternatives:</strong> (A) Reuse <code>process.NewJSONRPCScanner</code> (current), (B) Create a new raw JSONL scanner.</p>
+      <p><strong>Pros/Cons:</strong> (A) works because Pi's JSONL framing is line-delimited JSON, same as JSON-RPC. The scanner validates JSON and skips blank lines. (B) would avoid the "JSON-RPC" naming confusion but adds code for identical behavior.</p>
+      <p><strong>Winner:</strong> (A) — zero additional code, proven scanner.</p>
+    </div>
+
+    <h2><span class="dot question"></span> Open Questions</h2>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should we support Pi's <code>--session</code> for persistent sessions?</h3>
+      <p>Currently using <code>--no-session</code> for ephemeral runs. Pi has its own session management via <code>--session-dir</code>. If callers want Pi to maintain conversation state across <code>Run()</code> calls, we'd need to either: (a) let Pi manage sessions and pass <code>--session &lt;id&gt;</code>, or (b) rely on our own SessionStore as the orchestrator does.</p>
+      <p><strong>Verify:</strong> Whether Pi's session persistence is needed for multi-turn flows.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should <code>toolcall_delta</code> events be accumulated into complete ToolInput?</h3>
+      <p>Currently tool calls arrive with just ID and name. Arguments stream as <code>toolcall_delta</code> events with partial JSON. Accumulating these would give full ToolInput but requires buffering logic in the parser.</p>
+      <p><strong>Verify:</strong> Whether the orchestrator or caller needs complete tool arguments for approval decisions.</p>
+    </div>
+
+    <p class="footer">Generated by goal-workflow /note-it</p>
+  </div>
+</body>
+</html>

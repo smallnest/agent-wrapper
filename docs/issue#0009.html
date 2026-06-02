@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Implementation Notes — Issue #0009</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FAF9F6;
+      color: #1a1a1a;
+      padding: 2.5rem 2rem;
+      line-height: 1.7;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 1.375rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .meta { color: #8B8680; font-size: 0.8125rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.375rem;
+      border-bottom: 1px solid #E8E4DE;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+    .dot.design { background: #5B8A72; }
+    .dot.deviation { background: #D97757; }
+    .dot.tradeoff { background: #4A6FA5; }
+    .dot.question { background: #D4A843; }
+    .item {
+      background: #FFFFFF;
+      border: 1px solid #E8E4DE;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .item h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.375rem; }
+    .item p { font-size: 0.8125rem; color: #4A4540; margin-bottom: 0.375rem; }
+    .label {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      margin-right: 0.375rem;
+    }
+    .label-design { background: #F5F8F6; color: #5B8A72; border: 1px solid #5B8A72; }
+    .label-deviation { background: #FFF5F0; color: #D97757; border: 1px solid #D97757; }
+    .label-tradeoff { background: #F0F4F8; color: #4A6FA5; border: 1px solid #4A6FA5; }
+    .label-question { background: #FDF8F0; color: #D4A843; border: 1px solid #D4A843; }
+    .none { color: #B0AAA4; font-style: italic; font-size: 0.8125rem; }
+    .footer {
+      text-align: center; margin-top: 2.5rem; color: #B0AAA4;
+      font-size: 0.6875rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Implementation Notes</h1>
+    <p class="meta">Issue <a href="https://github.com/smallnest/agent-wrapper/issues/9">#9</a> &mdash; Orchestrator — Turn 循环编排器 &mdash; 2026-06-02</p>
+
+    <h2><span class="dot design"></span> Design Decisions</h2>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> Functional options pattern for Orchestrator configuration</h3>
+      <p><strong>Ambiguity:</strong> The spec defined <code>ApprovalHandler</code> and <code>BudgetHandler</code> as separate types but didn't specify how they're wired into the Orchestrator constructor.</p>
+      <p><strong>Choice:</strong> Used <code>NewOrchestrator(agent, store, opts...)</code> with <code>WithApprovalHandler</code> and <code>WithBudgetHandler</code> functional options.</p>
+      <p><strong>Rationale:</strong> Consistent with Go best practices for optional configuration. Both handlers are optional — nil approval means allow-all, nil budget means no limit. Functional options avoid constructor parameter sprawl if more hooks are added later.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> Approval deny produces synthetic ToolResult + continues turn</h3>
+      <p><strong>Ambiguity:</strong> The spec (5.2) says "deny → 构造 synthetic ToolResult → 作为 Message 追加到 session → 发送回 agent（继续 turn 循环）". But "发送回 agent" implies the orchestrator must re-inject the tool result into the agent's event stream, which isn't possible with a unidirectional <code>&lt;-chan Event</code>.</p>
+      <p><strong>Choice:</strong> On deny, the orchestrator appends a synthetic <code>Message{Role: "tool_result"}</code> to the session and emits both the <code>ToolCall</code> and synthetic <code>ToolResult</code> events to the caller. The agent continues its turn naturally — the real agent (e.g., Claude Code) will produce the <code>ToolResult</code> event itself since it executes tools internally. For agents like OpenCode that don't expose tool events, this path is moot.</p>
+      <p><strong>Rationale:</strong> The orchestrator cannot inject events back into the agent's output channel. The real tool execution happens inside the agent subprocess. For approval deny, we can only prevent the tool from running by communicating with the agent through its native protocol — but none of the current agents support this. The synthetic <code>ToolResult</code> in the session ensures the session history is consistent, and the forwarded events inform the caller.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> Writeback on TurnEnd flushes assistant text + tool messages together</h3>
+      <p><strong>Ambiguity:</strong> The spec (5.3) lists separate writeback rules for TextDelta (accumulated) and ToolCall/ToolResult (individual), but the "写入时机" says "每个 TurnEnd 事件时，一次性追加该 turn 中累积的所有新消息".</p>
+      <p><strong>Choice:</strong> Accumulate <code>assistantText</code> (from TextDelta) and <code>turnMessages</code> (tool_use + tool_result) separately during the turn, then on TurnEnd: append <code>Message{Role: "assistant"}</code> if text is non-empty, then append all turn messages, then save.</p>
+      <p><strong>Rationale:</strong> This matches the spec's "一次性追加" and ensures session messages are in the correct order: assistant text → tool calls → tool results for the turn.</p>
+    </div>
+
+    <h2><span class="dot deviation"></span> Deviations</h2>
+
+    <div class="item">
+      <h3><span class="label label-deviation">Deviation</span> Approval deny does not re-inject synthetic result back to agent</h3>
+      <p><strong>Spec said:</strong> "发送回 agent（继续 turn 循环）" — implies the orchestrator sends the denied tool result back to the agent process.</p>
+      <p><strong>Implemented:</strong> The synthetic <code>ToolResult</code> is added to the session and forwarded to the caller, but <strong>not injected back into the agent subprocess</strong>. The agent continues its turn and produces its own <code>ToolResult</code> event (since tool execution happens inside the agent).</p>
+      <p><strong>Why:</strong> The <code>Agent.Run()</code> interface returns <code>&lt;-chan Event</code> — a read-only channel. There is no mechanism to write events back to the agent process. True "deny and continue" would require the agent to support a bidirectional protocol (e.g., writing a rejection to stdin), which none of the current agents implement. This is a fundamental interface limitation that should be addressed in a future iteration if needed.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-deviation">Deviation</span> Stop on end_turn/stop regardless of MaxTurns</h3>
+      <p><strong>Spec said:</strong> The state machine diagram shows a "STOP? maxTurns or stop" decision after writeback, implying the orchestrator checks both conditions.</p>
+      <p><strong>Implemented:</strong> On <code>TurnEnd</code> with <code>StopReason == "end_turn"</code> or <code>"stop"</code>, the orchestrator always returns immediately, regardless of <code>MaxTurns</code>. <code>MaxTurns</code> only stops the loop when the agent wants to continue (e.g., <code>StopReason == "tool_use"</code>) but the turn limit is reached.</p>
+      <p><strong>Why:</strong> When the agent says "end_turn", it has finished its response — there's no point forcing another turn. <code>MaxTurns</code> is a guard rail against runaway tool-use loops, not a mechanism to force additional turns after the agent is done.</p>
+    </div>
+
+    <h2><span class="dot tradeoff"></span> Tradeoffs</h2>
+
+    <div class="item">
+      <h3><span class="label label-tradeoff">Tradeoff</span> Single goroutine event loop vs. separate event dispatcher</h3>
+      <p><strong>Alternatives:</strong> (A) Single goroutine reads from <code>eventCh</code>, processes events, and forwards to <code>out</code> channel; (B) Separate reader goroutine + dispatcher goroutine connected by an internal channel.</p>
+      <p><strong>Pros of A:</strong> Simpler — no extra channel, no coordination. All state is local to one goroutine. No race conditions.</p>
+      <p><strong>Pros of B:</strong> Could decouple reading from agent from writing to caller, potentially allowing backpressure handling.</p>
+      <p><strong>Chose A:</strong> The orchestrator's state (assistantText, turnMessages, turnNumber) is inherently sequential — each event depends on the previous one. A single goroutine is correct by construction and avoids synchronization complexity.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-tradeoff">Tradeoff</span> Store.Save() on every TurnEnd vs. deferred save</h3>
+      <p><strong>Alternatives:</strong> (A) Call <code>store.Save()</code> after every TurnEnd writeback; (B) Save only when the orchestrator returns (deferred).</p>
+      <p><strong>Pros of A:</strong> Session is persisted after each turn — if the process crashes, the last turn's state is recoverable.</p>
+      <p><strong>Pros of B:</strong> Fewer writes; avoids partial state if writeback logic has a bug.</p>
+      <p><strong>Chose A:</strong> The spec says "Save session to store" in the TurnEnd step. Per-turn persistence is the expected behavior for long-running agent sessions that may span many turns.</p>
+    </div>
+
+    <h2><span class="dot question"></span> Open Questions</h2>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> How should "deny" work with agents that execute tools internally?</h3>
+      <p>Current agents (Claude Code, Codex, Pi) execute tools inside the subprocess. By the time the orchestrator sees a <code>ToolCall</code> event, the tool has likely already been executed. The approval check is therefore advisory rather than enforceable. Should we document this as a known limitation, or design a protocol where the agent waits for approval before executing?</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should the Orchestrator handle multi-Agent turns (tool_use stop → new Agent.Run call)?</h3>
+      <p>When <code>StopReason == "tool_use"</code>, the current implementation just continues reading events from the same <code>eventCh</code>. This assumes the agent handles tool execution internally and produces subsequent turns on the same channel. If a future agent needs external tool execution, the orchestrator would need to re-call <code>Agent.Run()</code> with the updated session. Should we design for this now?</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should the Orchestrator validate session message ordering?</h3>
+      <p>The current implementation blindly appends messages without checking that tool_result messages match preceding tool_use messages, or that roles alternate correctly. Should we add validation, or trust the agent implementations to produce well-formed event streams?</p>
+    </div>
+
+    <p class="footer">Generated by goal-workflow /note-it</p>
+  </div>
+</body>
+</html>

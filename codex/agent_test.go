@@ -12,34 +12,33 @@ import (
 	"github.com/smallnest/agent-wrapper/types"
 )
 
-// mockCodexBinary creates a shell script that outputs SSE chunks.
-func mockCodexBinary(t *testing.T, sseLines []string) string {
+// mockCodexBinary creates a shell script that outputs JSONL events
+// matching the `codex exec --json` protocol.
+func mockCodexBinary(t *testing.T, jsonlLines []string) string {
 	t.Helper()
 	dir := t.TempDir()
 	script := filepath.Join(dir, "codex")
 	content := "#!/bin/sh\n"
-	for _, line := range sseLines {
+	for _, line := range jsonlLines {
 		content += fmt.Sprintf("echo '%s'\n", line)
 	}
-	content += "cat > /dev/null\n"
+	content += "exec sleep 1\n"
 	os.WriteFile(script, []byte(content), 0o755)
 	return script
 }
 
-func TestSSETextDelta(t *testing.T) {
+func TestTextDelta(t *testing.T) {
 	bin := mockCodexBinary(t, []string{
-		"data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"role\":\"assistant\"},\"index\":0}]}",
-		"",
-		"data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"content\":\"Hello, \"},\"index\":0}]}",
-		"",
-		"data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"content\":\"world!\"},\"index\":0}]}",
-		"",
-		"data: [DONE]",
-		"",
+		`{"type":"thread.started","thread_id":"t1"}`,
+		`{"type":"turn.started"}`,
+		`{"type":"message_delta","delta":"Hello, "}`,
+		`{"type":"message_delta","delta":"world!"}`,
+		`{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("hi"))
 
 	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
@@ -54,6 +53,15 @@ func TestSSETextDelta(t *testing.T) {
 			textDeltas = append(textDeltas, evt.TextDelta)
 		case types.EventTurnEnd:
 			turnEnds++
+			if evt.StopReason != "end_turn" {
+				t.Errorf("expected stopReason 'end_turn', got %q", evt.StopReason)
+			}
+			if evt.TokenUsage == nil {
+				t.Fatal("expected TokenUsage")
+			}
+			if evt.TokenUsage.TotalTokens != 30 {
+				t.Errorf("expected 30 total tokens, got %d", evt.TokenUsage.TotalTokens)
+			}
 		}
 	}
 
@@ -71,18 +79,18 @@ func TestSSETextDelta(t *testing.T) {
 	}
 }
 
-func TestSSEToolCall(t *testing.T) {
+func TestToolCall(t *testing.T) {
 	bin := mockCodexBinary(t, []string{
-		"data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"content\":\"Let me check.\"},\"index\":0}]}",
-		"",
-		"data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"read\",\"arguments\":\"{\\\"path\\\":\\\"main.go\\\"}\"}}]},\"index\":0}]}",
-		"",
-		"data: [DONE]",
-		"",
+		`{"type":"thread.started","thread_id":"t1"}`,
+		`{"type":"turn.started"}`,
+		`{"type":"message_delta","delta":"Let me check."}`,
+		`{"type":"tool_call","tool_call_id":"call_1","tool_name":"read","tool_input":{"path":"main.go"}}`,
+		`{"type":"turn.completed"}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("check"))
 
 	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
@@ -108,17 +116,48 @@ func TestSSEToolCall(t *testing.T) {
 	}
 }
 
-func TestSSETurnEndWithFinishReason(t *testing.T) {
-	stopReason := "stop"
+func TestToolResult(t *testing.T) {
 	bin := mockCodexBinary(t, []string{
-		"data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{\"content\":\"Done.\"},\"index\":0}]}",
-		"",
-		fmt.Sprintf("data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"delta\":{},\"index\":0,\"finish_reason\":\"%s\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":20,\"total_tokens\":30}}", stopReason),
-		"",
+		`{"type":"tool_result","tool_call_result_id":"call_1","tool_result":"file contents","is_error":false}`,
+		`{"type":"turn.completed"}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("read"))
+
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	var toolResults []types.Event
+	for evt := range events {
+		if evt.Type == types.EventToolResult {
+			toolResults = append(toolResults, evt)
+		}
+	}
+
+	if len(toolResults) != 1 {
+		t.Fatalf("expected 1 tool_result event, got %d", len(toolResults))
+	}
+	tr := toolResults[0]
+	if tr.ToolResultID != "call_1" {
+		t.Errorf("expected tool result ID 'call_1', got %q", tr.ToolResultID)
+	}
+	if tr.ToolResultOutput != "file contents" {
+		t.Errorf("expected 'file contents', got %q", tr.ToolResultOutput)
+	}
+}
+
+func TestTurnFailed(t *testing.T) {
+	bin := mockCodexBinary(t, []string{
+		`{"type":"turn.failed","error":{"message":"something went wrong"}}`,
+	})
+
+	agent := New(Options{BinaryPath: bin})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
 	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
@@ -126,25 +165,17 @@ func TestSSETurnEndWithFinishReason(t *testing.T) {
 	}
 
 	for evt := range events {
-		if evt.Type == types.EventTurnEnd {
-			if evt.StopReason != "stop" {
-				t.Errorf("expected stopReason 'stop', got %q", evt.StopReason)
-			}
-			if evt.TokenUsage == nil {
-				t.Fatal("expected TokenUsage")
-			}
-			if evt.TokenUsage.TotalTokens != 30 {
-				t.Errorf("expected 30 total tokens, got %d", evt.TokenUsage.TotalTokens)
-			}
+		if evt.Type == types.EventError {
 			return
 		}
 	}
-	t.Fatal("never received turn_end event")
+	t.Fatal("expected error event for turn.failed")
 }
 
 func TestBinaryNotFound(t *testing.T) {
 	agent := New(Options{BinaryPath: "/nonexistent/path/codex"})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
 	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err == nil {
@@ -180,19 +211,29 @@ func TestBinaryAutoDetectNotFound(t *testing.T) {
 	}
 }
 
+func TestNoUserMessage(t *testing.T) {
+	agent := New(Options{BinaryPath: "/nonexistent/codex"})
+	session := types.NewSession()
+
+	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err == nil {
+		t.Fatal("expected error when no user message found")
+	}
+}
+
 func TestContextCancellation(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "codex")
 	content := "#!/bin/sh\n"
-	content += "echo 'data: {\"id\":\"c\",\"choices\":[{\"delta\":{\"content\":\"hi\"},\"index\":0}]}'\n"
-	content += "echo ''\n"
+	content += `echo '{"type":"message_delta","delta":"hi"}'` + "\n"
 	content += "exec sleep 10\n"
 	os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 	defer cancel()
 
 	events, err := agent.Run(ctx, types.RunInput{Session: session})
@@ -243,7 +284,6 @@ func TestMessagesToOpenAI(t *testing.T) {
 	if result[1]["role"] != "assistant" {
 		t.Errorf("msg 1: expected role 'assistant', got %v", result[1]["role"])
 	}
-	// tool_use maps to assistant with tool_calls
 	if result[2]["role"] != "assistant" {
 		t.Errorf("msg 2: expected role 'assistant' (tool_use), got %v", result[2]["role"])
 	}

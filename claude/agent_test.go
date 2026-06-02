@@ -12,8 +12,8 @@ import (
 	"github.com/smallnest/agent-wrapper/types"
 )
 
-// mockClaudeBinary creates a temporary shell script that reads stdin lines
-// and writes predefined JSON-RPC notifications to stdout.
+// mockClaudeBinary creates a temporary shell script that simulates
+// `claude -p ... --output-format stream-json --verbose` output.
 func mockClaudeBinary(t *testing.T, notifications []string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -22,26 +22,25 @@ func mockClaudeBinary(t *testing.T, notifications []string) string {
 	for _, n := range notifications {
 		content += fmt.Sprintf("echo '%s'\n", n)
 	}
-	// Wait for stdin to close then exit
-	content += "cat > /dev/null\n"
+	content += "exec sleep 1\n"
 	os.WriteFile(script, []byte(content), 0o755)
 	return script
 }
 
 func TestNotifyTextDelta(t *testing.T) {
 	bin := mockClaudeBinary(t, []string{
-		`{"jsonrpc":"2.0","id":1,"result":{"status":"initialized"}}`,
-		`{"jsonrpc":"2.0","method":"notify/text_delta","params":{"text":"Hello, "}}`,
-		`{"jsonrpc":"2.0","method":"notify/text_delta","params":{"text":"world!"}}`,
-		`{"jsonrpc":"2.0","method":"notify/turn_end","params":{"stopReason":"end_turn","turnNumber":1,"usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30}}}`,
+		`{"type":"system","subtype":"init","session_id":"s1"}`,
+		`{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"Hello, "}]}}`,
+		`{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"world!"}]}}`,
+		`{"type":"result","subtype":"success","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":20}}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("hi"))
 
 	events, err := agent.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: nil,
+		Session: session,
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -57,9 +56,6 @@ func TestNotifyTextDelta(t *testing.T) {
 			turnEnds++
 			if evt.StopReason != "end_turn" {
 				t.Errorf("expected stopReason 'end_turn', got %q", evt.StopReason)
-			}
-			if evt.TurnNumber != 1 {
-				t.Errorf("expected turnNumber 1, got %d", evt.TurnNumber)
 			}
 			if evt.TokenUsage == nil {
 				t.Fatal("expected TokenUsage")
@@ -86,13 +82,14 @@ func TestNotifyTextDelta(t *testing.T) {
 
 func TestNotifyToolUse(t *testing.T) {
 	bin := mockClaudeBinary(t, []string{
-		`{"jsonrpc":"2.0","method":"notify/text_delta","params":{"text":"Let me check."}}`,
-		`{"jsonrpc":"2.0","method":"notify/tool_use","params":{"id":"call_1","name":"read","input":{"path":"main.go"}}}`,
-		`{"jsonrpc":"2.0","method":"notify/turn_end","params":{"stopReason":"tool_use","turnNumber":1,"usage":{"input_tokens":5,"output_tokens":10,"total_tokens":15}}}`,
+		`{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"Let me check."}]}}`,
+		`{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"read","input":{"path":"main.go"}}]}}`,
+		`{"type":"result","subtype":"success","stop_reason":"tool_use","usage":{"input_tokens":5,"output_tokens":10}}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("check"))
 
 	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
@@ -118,14 +115,49 @@ func TestNotifyToolUse(t *testing.T) {
 	}
 }
 
-func TestNotifyTurnEnd(t *testing.T) {
+func TestNotifyToolResult(t *testing.T) {
 	bin := mockClaudeBinary(t, []string{
-		`{"jsonrpc":"2.0","method":"notify/text_delta","params":{"text":"Done."}}`,
-		`{"jsonrpc":"2.0","method":"notify/turn_end","params":{"stopReason":"end_turn","turnNumber":2,"usage":{"input_tokens":100,"output_tokens":200,"total_tokens":300}}}`,
+		`{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"tool_result","tool_use_id":"call_1","text":"file contents","is_error":false}]}}`,
+		`{"type":"result","subtype":"success","stop_reason":"end_turn"}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("read"))
+
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	var toolResults []types.Event
+	for evt := range events {
+		if evt.Type == types.EventToolResult {
+			toolResults = append(toolResults, evt)
+		}
+	}
+
+	if len(toolResults) != 1 {
+		t.Fatalf("expected 1 tool_result event, got %d", len(toolResults))
+	}
+	tr := toolResults[0]
+	if tr.ToolResultID != "call_1" {
+		t.Errorf("expected tool result ID 'call_1', got %q", tr.ToolResultID)
+	}
+	if tr.ToolResultOutput != "file contents" {
+		t.Errorf("expected 'file contents', got %q", tr.ToolResultOutput)
+	}
+}
+
+func TestNotifyTurnEnd(t *testing.T) {
+	bin := mockClaudeBinary(t, []string{
+		`{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"Done."}]}}`,
+		`{"type":"result","subtype":"success","stop_reason":"end_turn","usage":{"input_tokens":100,"output_tokens":200}}`,
+	})
+
+	agent := New(Options{BinaryPath: bin})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("go"))
 
 	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
@@ -134,9 +166,6 @@ func TestNotifyTurnEnd(t *testing.T) {
 
 	for evt := range events {
 		if evt.Type == types.EventTurnEnd {
-			if evt.TurnNumber != 2 {
-				t.Errorf("expected turnNumber 2, got %d", evt.TurnNumber)
-			}
 			if evt.TokenUsage.InputTokens != 100 {
 				t.Errorf("expected 100 input tokens, got %d", evt.TokenUsage.InputTokens)
 			}
@@ -149,24 +178,22 @@ func TestNotifyTurnEnd(t *testing.T) {
 func TestBinaryNotFound(t *testing.T) {
 	agent := New(Options{BinaryPath: "/nonexistent/path/claude"})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
 	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err == nil {
 		t.Fatal("expected error for missing binary")
 	}
-	// The error from resolveBinary won't be returned because BinaryPath is set;
-	// StartProcess will fail instead.
 }
 
 func TestBinaryAutoDetect(t *testing.T) {
-	// Create a mock binary in a temp dir and add it to PATH.
 	dir := t.TempDir()
 	script := filepath.Join(dir, "claude")
 	os.WriteFile(script, []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755)
 
 	t.Setenv("PATH", dir)
 
-	agent := New(Options{}) // empty BinaryPath triggers auto-detect
+	agent := New(Options{})
 	bin, err := agent.resolveBinary()
 	if err != nil {
 		t.Fatalf("resolveBinary: %v", err)
@@ -191,14 +218,15 @@ func TestContextCancellation(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "claude")
 	content := "#!/bin/sh\n"
-	content += `echo '{"jsonrpc":"2.0","method":"notify/text_delta","params":{"text":"hi"}}'` + "\n"
+	content += `echo '{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"hi"}]}}'` + "\n"
 	content += "exec sleep 10\n"
 	os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 	defer cancel()
 
 	events, err := agent.Run(ctx, types.RunInput{Session: session})
@@ -227,6 +255,16 @@ func TestNameAndProvider(t *testing.T) {
 	}
 	if err := agent.Close(); err != nil {
 		t.Errorf("Close: %v", err)
+	}
+}
+
+func TestNoUserMessage(t *testing.T) {
+	agent := New(Options{BinaryPath: "/nonexistent/claude"})
+	session := types.NewSession()
+
+	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err == nil {
+		t.Fatal("expected error when no user message found")
 	}
 }
 

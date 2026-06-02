@@ -7,6 +7,7 @@ import (
 )
 
 // messagesToContentBlocks converts []Message to Anthropic content blocks.
+// Kept for backward compatibility with tests.
 func messagesToContentBlocks(msgs []types.Message) []map[string]any {
 	blocks := make([]map[string]any, 0, len(msgs))
 	for _, msg := range msgs {

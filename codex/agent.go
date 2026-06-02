@@ -21,7 +21,7 @@ type Options struct {
 	Extra      map[string]any // provider-specific parameters
 }
 
-// CodexAgent drives the OpenAI Codex CLI via SSE (OpenAI Chat Completions).
+// CodexAgent drives the OpenAI Codex CLI via non-interactive exec mode with JSONL output.
 type CodexAgent struct {
 	opts   Options
 	binary string
@@ -71,38 +71,37 @@ func (a *CodexAgent) resolveBinary() (string, error) {
 	return a.binary, nil
 }
 
-// chatRequest is an OpenAI Chat Completions request.
-type chatRequest struct {
-	Model    string         `json:"model"`
-	Messages []map[string]any `json:"messages"`
-	Stream   bool           `json:"stream"`
+// codexEvent is a single JSONL event from `codex exec --json`.
+type codexEvent struct {
+	Type    string          `json:"type"`
+	Message string          `json:"message,omitempty"`
+	Error   *codexError     `json:"error,omitempty"`
+
+	// message_delta / text content
+	Delta string `json:"delta,omitempty"`
+
+	// tool call
+	ToolCallID   string          `json:"tool_call_id,omitempty"`
+	ToolName     string          `json:"tool_name,omitempty"`
+	ToolInput    json.RawMessage `json:"tool_input,omitempty"`
+
+	// tool result
+	ToolCallResultID string `json:"tool_call_result_id,omitempty"`
+	ToolResult       string `json:"tool_result,omitempty"`
+	IsError          bool   `json:"is_error,omitempty"`
+
+	// turn completed
+	Usage *codexUsage `json:"usage,omitempty"`
 }
 
-// sseChunk is a minimal SSE chunk from OpenAI Chat Completions streaming.
-type sseChunk struct {
-	ID      string `json:"id"`
-	Choices []struct {
-		Index int `json:"index"`
-		Delta struct {
-			Role      string `json:"role,omitempty"`
-			Content   string `json:"content,omitempty"`
-			ToolCalls []struct {
-				Index    int    `json:"index"`
-				ID       string `json:"id,omitempty"`
-				Type     string `json:"type,omitempty"`
-				Function struct {
-					Name      string `json:"name,omitempty"`
-					Arguments string `json:"arguments,omitempty"`
-				} `json:"function"`
-			} `json:"tool_calls,omitempty"`
-		} `json:"delta"`
-		FinishReason *string `json:"finish_reason"`
-	} `json:"choices"`
-	Usage *struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	} `json:"usage,omitempty"`
+type codexError struct {
+	Message string `json:"message,omitempty"`
+}
+
+type codexUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+	TotalTokens  int `json:"total_tokens"`
 }
 
 // RegisterIn replaces the codex stub in the registry with a real factory.
@@ -112,19 +111,27 @@ func RegisterIn(r *agentwrapper.Registry) error {
 	}, true)
 }
 
-// Run starts a codex chat subprocess and returns an event channel.
+// Run starts a codex exec subprocess and returns an event channel.
 func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.Event, error) {
 	bin, err := a.resolveBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	model := a.opts.Model
-	if model == "" {
-		model = "codex-mini-latest"
+	// Build the prompt from session messages or new message.
+	messages := input.Session.Messages
+	if input.NewMessage != nil {
+		messages = append(messages, *input.NewMessage)
+	}
+	prompt := lastUserMessage(messages)
+	if prompt == "" {
+		return nil, fmt.Errorf("codex: no user message found in input")
 	}
 
-	args := []string{"chat", "--model", model}
+	args := []string{"exec", prompt, "--json"}
+	if a.opts.Model != "" {
+		args = append(args, "--model", a.opts.Model)
+	}
 
 	proc, err := process.StartProcess(ctx, process.ProcessConfig{
 		Command: bin,
@@ -135,137 +142,77 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 		return nil, fmt.Errorf("start codex process: %w", err)
 	}
 
-	messages := input.Session.Messages
-	if input.NewMessage != nil {
-		messages = append(messages, *input.NewMessage)
-	}
-
-	openAIMsgs := messagesToOpenAI(messages)
-
-	// Prepend system prompt if provided.
-	if input.SystemPrompt != "" {
-		openAIMsgs = append([]map[string]any{
-			{"role": "system", "content": input.SystemPrompt},
-		}, openAIMsgs...)
-	}
-
-	req := chatRequest{
-		Model:    model,
-		Messages: openAIMsgs,
-		Stream:   true,
-	}
-	reqBytes, err := json.Marshal(req)
-	if err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("marshal chat request: %w", err)
-	}
-	if _, err := proc.Stdin().Write(reqBytes); err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("write chat request: %w", err)
-	}
-
-	if closer, ok := proc.Stdin().(interface{ Close() error }); ok {
-		closer.Close()
-	}
-
 	events := make(chan types.Event, 64)
 
 	go func() {
 		defer close(events)
 		defer proc.Close()
 
-		scanner := process.NewSSEScanner(proc.Stdout())
-		turnNumber := 0
-		var totalUsage types.TokenUsage
+		scanner := process.NewJSONRPCScanner(proc.Stdout())
+		var turnNumber int
 
 		for scanner.Scan() {
 			frame := scanner.Frame()
+			var evt codexEvent
+			if err := json.Unmarshal(frame.Data, &evt); err != nil {
+				continue
+			}
 
-			// [DONE] signal
-			if frame.Data == nil {
+			var out types.Event
+			switch evt.Type {
+			case "message_delta":
+				if evt.Delta != "" {
+					out = types.Event{Type: types.EventTextDelta, TextDelta: evt.Delta}
+				}
+			case "tool_call":
+				out = types.Event{
+					Type:       types.EventToolCall,
+					ToolCallID: evt.ToolCallID,
+					ToolName:   evt.ToolName,
+					ToolInput:  evt.ToolInput,
+				}
+			case "tool_result":
+				out = types.Event{
+					Type:             types.EventToolResult,
+					ToolResultID:     evt.ToolCallResultID,
+					ToolResultOutput: evt.ToolResult,
+					ToolResultError:  evt.IsError,
+				}
+			case "turn.completed":
 				turnNumber++
-				evt := types.Event{
+				out = types.Event{
 					Type:       types.EventTurnEnd,
 					TurnNumber: turnNumber,
 					StopReason: "end_turn",
 				}
-				if totalUsage.TotalTokens > 0 {
-					evt.TokenUsage = &types.TokenUsage{
-						InputTokens:  totalUsage.InputTokens,
-						OutputTokens: totalUsage.OutputTokens,
-						TotalTokens:  totalUsage.TotalTokens,
+				if evt.Usage != nil {
+					out.TokenUsage = &types.TokenUsage{
+						InputTokens:  evt.Usage.InputTokens,
+						OutputTokens: evt.Usage.OutputTokens,
+						TotalTokens:  evt.Usage.TotalTokens,
 					}
 				}
-				select {
-				case events <- evt:
-				case <-ctx.Done():
+			case "turn.failed":
+				out = types.Event{
+					Type:       types.EventError,
+					Error:      fmt.Errorf("codex turn failed: %s", evt.Error.Message),
 				}
+			default:
 				continue
 			}
 
-			var chunk sseChunk
-			if err := json.Unmarshal(frame.Data, &chunk); err != nil {
+			if out.Type == "" {
 				continue
 			}
 
-			if chunk.Usage != nil {
-				totalUsage.InputTokens = chunk.Usage.PromptTokens
-				totalUsage.OutputTokens = chunk.Usage.CompletionTokens
-				totalUsage.TotalTokens = chunk.Usage.TotalTokens
+			select {
+			case events <- out:
+			case <-ctx.Done():
+				events <- types.Event{Type: types.EventError, Error: ctx.Err()}
+				return
 			}
-
-			for _, choice := range chunk.Choices {
-				// Text delta
-				if choice.Delta.Content != "" {
-					evt := types.Event{
-						Type:      types.EventTextDelta,
-						TextDelta: choice.Delta.Content,
-					}
-					select {
-					case events <- evt:
-					case <-ctx.Done():
-						return
-					}
-				}
-
-				// Tool calls
-				for _, tc := range choice.Delta.ToolCalls {
-					if tc.ID != "" && tc.Function.Name != "" {
-						evt := types.Event{
-							Type:       types.EventToolCall,
-							ToolCallID: tc.ID,
-							ToolName:   tc.Function.Name,
-							ToolInput:  json.RawMessage(tc.Function.Arguments),
-						}
-						select {
-						case events <- evt:
-						case <-ctx.Done():
-							return
-						}
-					}
-				}
-
-				// Finish reason — emit TurnEnd
-				if choice.FinishReason != nil && *choice.FinishReason != "" {
-					turnNumber++
-					evt := types.Event{
-						Type:       types.EventTurnEnd,
-						TurnNumber: turnNumber,
-						StopReason: *choice.FinishReason,
-					}
-					if totalUsage.TotalTokens > 0 {
-						evt.TokenUsage = &types.TokenUsage{
-							InputTokens:  totalUsage.InputTokens,
-							OutputTokens: totalUsage.OutputTokens,
-							TotalTokens:  totalUsage.TotalTokens,
-						}
-					}
-					select {
-					case events <- evt:
-					case <-ctx.Done():
-						return
-					}
-				}
+			if out.Type == types.EventTurnEnd {
+				break
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -277,4 +224,14 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 	}()
 
 	return events, nil
+}
+
+// lastUserMessage returns the last user message content from the message list.
+func lastUserMessage(msgs []types.Message) string {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == types.RoleUser {
+			return msgs[i].Content
+		}
+	}
+	return ""
 }

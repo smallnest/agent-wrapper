@@ -5,8 +5,7 @@ import (
 )
 
 // messagesToPrompt extracts the user prompt from the session messages for the
-// opencode non-interactive mode. OpenCode -p accepts a single prompt string;
-// we send the last user message as the prompt.
+// opencode non-interactive mode. Kept for backward compatibility with tests.
 func messagesToPrompt(msgs []types.Message) string {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Role == types.RoleUser {

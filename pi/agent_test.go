@@ -11,7 +11,8 @@ import (
 	"github.com/smallnest/agent-wrapper/types"
 )
 
-// mockPiBinary creates a shell script that outputs JSONL events.
+// mockPiBinary creates a shell script that outputs JSONL events
+// matching the `pi -p ... --mode json` protocol.
 func mockPiBinary(t *testing.T, lines []string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -20,35 +21,54 @@ func mockPiBinary(t *testing.T, lines []string) string {
 	for _, line := range lines {
 		content += fmt.Sprintf("echo '%s'\n", line)
 	}
-	// Exit without waiting for stdin — the agent reads stdout and breaks after turn_end
-	content += "exit 0\n"
+	content += "exec sleep 1\n"
 	os.WriteFile(script, []byte(content), 0o755)
 	return script
 }
 
 func TestTextDelta(t *testing.T) {
 	bin := mockPiBinary(t, []string{
-		`{"id":"1","type":"response","command":"prompt","success":true}`,
+		`{"type":"session","version":3,"id":"s1","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp"}`,
+		`{"type":"agent_start"}`,
+		`{"type":"turn_start"}`,
+		`{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}`,
+		`{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}`,
 		`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Hello, "}}`,
 		`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"world!"}}`,
-		`{"type":"turn_end","turnIndex":0}`,
+		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"usage":{"input":10,"output":20,"totalTokens":30}}}`,
+		`{"type":"turn_end","message":{"role":"assistant","content":[{"type":"text","text":"Hello, world!"}],"usage":{"input":10,"output":20,"totalTokens":30}},"toolResults":[]}`,
+		`{"type":"agent_end","messages":[]}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("hi"))
 
-	events, err := agent.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: ptrMsg(types.NewUserMessage("hi")),
-	})
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
 	var deltas []string
+	var turnEnds int
 	for evt := range events {
-		if evt.Type == types.EventTextDelta {
+		switch evt.Type {
+		case types.EventTextDelta:
 			deltas = append(deltas, evt.TextDelta)
+		case types.EventTurnEnd:
+			turnEnds++
+			if evt.StopReason != "end_turn" {
+				t.Errorf("expected stopReason 'end_turn', got %q", evt.StopReason)
+			}
+			if evt.TurnNumber != 1 {
+				t.Errorf("expected turnNumber 1, got %d", evt.TurnNumber)
+			}
+			if evt.TokenUsage == nil {
+				t.Fatal("expected TokenUsage")
+			}
+			if evt.TokenUsage.TotalTokens != 30 {
+				t.Errorf("expected 30 total tokens, got %d", evt.TokenUsage.TotalTokens)
+			}
 		}
 	}
 
@@ -61,24 +81,28 @@ func TestTextDelta(t *testing.T) {
 	if deltas[1] != "world!" {
 		t.Errorf("delta 1: expected 'world!', got %q", deltas[1])
 	}
+	if turnEnds != 1 {
+		t.Errorf("expected 1 turn_end, got %d", turnEnds)
+	}
 }
 
 func TestToolExecution(t *testing.T) {
 	bin := mockPiBinary(t, []string{
-		`{"id":"1","type":"response","command":"prompt","success":true}`,
+		`{"type":"session","version":3,"id":"s1","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp"}`,
+		`{"type":"agent_start"}`,
+		`{"type":"turn_start"}`,
 		`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Let me check."}}`,
 		`{"type":"tool_execution_start","toolCallId":"tc_1","toolName":"read"}`,
 		`{"type":"tool_execution_end","toolCallId":"tc_1","toolName":"read","data":{"output":"file contents"},"isError":false}`,
-		`{"type":"turn_end","turnIndex":0}`,
+		`{"type":"turn_end","message":{"role":"assistant","content":[{"type":"text","text":"Done."}]},"toolResults":[]}`,
+		`{"type":"agent_end","messages":[]}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("check file"))
 
-	events, err := agent.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: ptrMsg(types.NewUserMessage("check file")),
-	})
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -112,18 +136,19 @@ func TestToolExecution(t *testing.T) {
 
 func TestTurnEnd(t *testing.T) {
 	bin := mockPiBinary(t, []string{
-		`{"id":"1","type":"response","command":"prompt","success":true}`,
+		`{"type":"session","version":3,"id":"s1","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp"}`,
+		`{"type":"agent_start"}`,
+		`{"type":"turn_start"}`,
 		`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Done."}}`,
-		`{"type":"turn_end","turnIndex":0}`,
+		`{"type":"turn_end","message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"usage":{"input":100,"output":200,"totalTokens":300}},"toolResults":[]}`,
+		`{"type":"agent_end","messages":[]}`,
 	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
-	events, err := agent.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: ptrMsg(types.NewUserMessage("test")),
-	})
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -136,20 +161,49 @@ func TestTurnEnd(t *testing.T) {
 			if evt.StopReason != "end_turn" {
 				t.Errorf("expected stopReason 'end_turn', got %q", evt.StopReason)
 			}
+			if evt.TokenUsage == nil {
+				t.Fatal("expected TokenUsage")
+			}
+			if evt.TokenUsage.TotalTokens != 300 {
+				t.Errorf("expected 300 total tokens, got %d", evt.TokenUsage.TotalTokens)
+			}
 			return
 		}
 	}
 	t.Fatal("never received turn_end event")
 }
 
+func TestErrorEvent(t *testing.T) {
+	bin := mockPiBinary(t, []string{
+		`{"type":"error","error":{"name":"AuthError","message":"API key missing"}}`,
+	})
+
+	agent := New(Options{BinaryPath: bin})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for evt := range events {
+		if evt.Type == types.EventError {
+			if evt.Error == nil {
+				t.Fatal("expected error in event")
+			}
+			return
+		}
+	}
+	t.Fatal("never received error event")
+}
+
 func TestBinaryNotFound(t *testing.T) {
 	agent := New(Options{BinaryPath: "/nonexistent/path/pi"})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
-	_, err := agent.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: ptrMsg(types.NewUserMessage("test")),
-	})
+	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err == nil {
 		t.Fatal("expected error for missing binary")
 	}
@@ -183,6 +237,16 @@ func TestBinaryAutoDetectNotFound(t *testing.T) {
 	}
 }
 
+func TestNoUserMessage(t *testing.T) {
+	agent := New(Options{BinaryPath: "/nonexistent/pi"})
+	session := types.NewSession()
+
+	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err == nil {
+		t.Fatal("expected error when no user message found")
+	}
+}
+
 func TestContextCancellation(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "pi")
@@ -193,14 +257,12 @@ func TestContextCancellation(t *testing.T) {
 
 	agent := New(Options{BinaryPath: script})
 	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 	defer cancel()
 
-	events, err := agent.Run(ctx, types.RunInput{
-		Session:    session,
-		NewMessage: ptrMsg(types.NewUserMessage("test")),
-	})
+	events, err := agent.Run(ctx, types.RunInput{Session: session})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -246,5 +308,3 @@ func TestMessagesToPrompt(t *testing.T) {
 		t.Errorf("expected empty string for nil, got %q", empty)
 	}
 }
-
-func ptrMsg(m types.Message) *types.Message { return &m }

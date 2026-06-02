@@ -20,19 +20,13 @@ type Options struct {
 	Extra      map[string]any // provider-specific parameters
 }
 
-// ClaudeCodeAgent drives the Claude Code CLI via JSON-RPC 2.0.
+// ClaudeCodeAgent drives the Claude Code CLI via non-interactive mode
+// with stream-json output (NDJSON).
 type ClaudeCodeAgent struct {
 	opts   Options
 	binary string
 	once   sync.Once
 }
-
-const (
-	methodTextDelta  = "notify/text_delta"
-	methodToolUse    = "notify/tool_use"
-	methodToolResult = "notify/tool_result"
-	methodTurnEnd    = "notify/turn_end"
-)
 
 // New creates a ClaudeCodeAgent.
 func New(opts Options) *ClaudeCodeAgent {
@@ -77,27 +71,67 @@ func (a *ClaudeCodeAgent) resolveBinary() (string, error) {
 	return a.binary, nil
 }
 
-type jsonRPCRequest struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Method  string `json:"method"`
-	Params  any    `json:"params,omitempty"`
+// claudeEvent is a single NDJSON event from `claude -p --output-format stream-json --verbose`.
+type claudeEvent struct {
+	Type    string `json:"type"`
+	Subtype string `json:"subtype,omitempty"`
+
+	// system/init event
+	SessionID string `json:"session_id,omitempty"`
+
+	// assistant event
+	Message *claudeMessage `json:"message,omitempty"`
+
+	// result event
+	IsError   bool   `json:"is_error,omitempty"`
+	Result    string `json:"result,omitempty"`
+	StopReason string `json:"stop_reason,omitempty"`
+	Usage     *claudeUsage `json:"usage,omitempty"`
 }
 
-type rawNotification struct {
-	JSONRPC string          `json:"jsonrpc"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params"`
+type claudeMessage struct {
+	ID      string           `json:"id"`
+	Role    string           `json:"role"`
+	Content []claudeContent  `json:"content"`
 }
 
-// Run starts a claude agent subprocess and returns an event channel.
+type claudeContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+
+	// tool_use
+	ID    string          `json:"id,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
+
+	// tool_result
+	ToolUseID string `json:"tool_use_id,omitempty"`
+	IsError   bool   `json:"is_error,omitempty"`
+}
+
+type claudeUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
+// Run starts a claude subprocess in non-interactive mode and returns an event channel.
 func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.Event, error) {
 	bin, err := a.resolveBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	args := []string{"agent"}
+	// Build the prompt from session messages or new message.
+	messages := input.Session.Messages
+	if input.NewMessage != nil {
+		messages = append(messages, *input.NewMessage)
+	}
+	prompt := lastUserMessage(messages)
+	if prompt == "" {
+		return nil, fmt.Errorf("claude: no user message found in input")
+	}
+
+	args := []string{"-p", prompt, "--output-format", "stream-json", "--verbose"}
 	if a.opts.Model != "" {
 		args = append(args, "--model", a.opts.Model)
 	}
@@ -118,52 +152,6 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 		return nil, fmt.Errorf("start claude process: %w", err)
 	}
 
-	messages := input.Session.Messages
-	if input.NewMessage != nil {
-		messages = append(messages, *input.NewMessage)
-	}
-
-	contentBlocks := messagesToContentBlocks(messages)
-
-	initReq := jsonRPCRequest{
-		JSONRPC: "2.0",
-		ID:      1,
-		Method:  "initialize",
-		Params: map[string]any{
-			"systemPrompt": input.SystemPrompt,
-			"messages":     contentBlocks,
-		},
-	}
-	initBytes, err := json.Marshal(initReq)
-	if err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("marshal initialize request: %w", err)
-	}
-	if _, err := fmt.Fprintf(proc.Stdin(), "%s\n", initBytes); err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("write initialize: %w", err)
-	}
-
-	runReq := jsonRPCRequest{
-		JSONRPC: "2.0",
-		ID:      2,
-		Method:  "run",
-		Params:  map[string]any{},
-	}
-	runBytes, err := json.Marshal(runReq)
-	if err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("marshal run request: %w", err)
-	}
-	if _, err := fmt.Fprintf(proc.Stdin(), "%s\n", runBytes); err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("write run request: %w", err)
-	}
-
-	if closer, ok := proc.Stdin().(interface{ Close() error }); ok {
-		closer.Close()
-	}
-
 	events := make(chan types.Event, 64)
 
 	go func() {
@@ -171,9 +159,10 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 		defer proc.Close()
 
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
+
 		for scanner.Scan() {
 			frame := scanner.Frame()
-			evt, ok := parseNotification(frame.Data)
+			evt, ok := parseClaudeEvent(frame.Data)
 			if !ok {
 				continue
 			}
@@ -182,6 +171,9 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 			case <-ctx.Done():
 				events <- types.Event{Type: types.EventError, Error: ctx.Err()}
 				return
+			}
+			if evt.Type == types.EventTurnEnd {
+				break
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -195,72 +187,66 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 	return events, nil
 }
 
-func parseNotification(data []byte) (types.Event, bool) {
-	var raw rawNotification
+func parseClaudeEvent(data []byte) (types.Event, bool) {
+	var raw claudeEvent
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return types.Event{}, false
 	}
-	if raw.Method == "" {
-		return types.Event{}, false
-	}
 
-	switch raw.Method {
-	case methodTextDelta:
-		var p struct {
-			Text string `json:"text"`
+	switch raw.Type {
+	case "assistant":
+		if raw.Message == nil {
+			return types.Event{}, false
 		}
-		if err := json.Unmarshal(raw.Params, &p); err != nil {
-			return types.Event{Type: types.EventError, Error: fmt.Errorf("parse text_delta: %w", err)}, true
+		for _, c := range raw.Message.Content {
+			switch c.Type {
+			case "text":
+				return types.Event{Type: types.EventTextDelta, TextDelta: c.Text}, true
+			case "tool_use":
+				return types.Event{
+					Type:       types.EventToolCall,
+					ToolCallID: c.ID,
+					ToolName:   c.Name,
+					ToolInput:  c.Input,
+				}, true
+			case "tool_result":
+				return types.Event{
+					Type:             types.EventToolResult,
+					ToolResultID:     c.ToolUseID,
+					ToolResultOutput: c.Text,
+					ToolResultError:  c.IsError,
+				}, true
+			}
 		}
-		return types.Event{Type: types.EventTextDelta, TextDelta: p.Text}, true
 
-	case methodToolUse:
-		var p struct {
-			ID    string          `json:"id"`
-			Name  string          `json:"name"`
-			Input json.RawMessage `json:"input"`
+	case "result":
+		evt := types.Event{
+			Type:       types.EventTurnEnd,
+			TurnNumber: 1,
+			StopReason: raw.StopReason,
 		}
-		if err := json.Unmarshal(raw.Params, &p); err != nil {
-			return types.Event{Type: types.EventError, Error: fmt.Errorf("parse tool_use: %w", err)}, true
+		if raw.StopReason == "" {
+			evt.StopReason = "end_turn"
 		}
-		return types.Event{
-			Type: types.EventToolCall, ToolCallID: p.ID, ToolName: p.Name, ToolInput: p.Input,
-		}, true
-
-	case methodToolResult:
-		var p struct {
-			ID      string `json:"id"`
-			Content string `json:"content"`
-			IsError bool   `json:"is_error"`
+		if raw.Usage != nil {
+			evt.TokenUsage = &types.TokenUsage{
+				InputTokens:  raw.Usage.InputTokens,
+				OutputTokens: raw.Usage.OutputTokens,
+				TotalTokens:  raw.Usage.InputTokens + raw.Usage.OutputTokens,
+			}
 		}
-		if err := json.Unmarshal(raw.Params, &p); err != nil {
-			return types.Event{Type: types.EventError, Error: fmt.Errorf("parse tool_result: %w", err)}, true
-		}
-		return types.Event{
-			Type: types.EventToolResult, ToolResultID: p.ID,
-			ToolResultOutput: p.Content, ToolResultError: p.IsError,
-		}, true
-
-	case methodTurnEnd:
-		var p struct {
-			StopReason string `json:"stopReason"`
-			TurnNumber int    `json:"turnNumber"`
-			Usage      struct {
-				InputTokens  int `json:"input_tokens"`
-				OutputTokens int `json:"output_tokens"`
-				TotalTokens  int `json:"total_tokens"`
-			} `json:"usage"`
-		}
-		if err := json.Unmarshal(raw.Params, &p); err != nil {
-			return types.Event{Type: types.EventError, Error: fmt.Errorf("parse turn_end: %w", err)}, true
-		}
-		return types.Event{
-			Type: types.EventTurnEnd, TurnNumber: p.TurnNumber, StopReason: p.StopReason,
-			TokenUsage: &types.TokenUsage{
-				InputTokens: p.Usage.InputTokens, OutputTokens: p.Usage.OutputTokens, TotalTokens: p.Usage.TotalTokens,
-			},
-		}, true
+		return evt, true
 	}
 
 	return types.Event{}, false
+}
+
+// lastUserMessage returns the last user message content from the message list.
+func lastUserMessage(msgs []types.Message) string {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == types.RoleUser {
+			return msgs[i].Content
+		}
+	}
+	return ""
 }

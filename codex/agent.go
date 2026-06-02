@@ -73,17 +73,17 @@ func (a *CodexAgent) resolveBinary() (string, error) {
 
 // codexEvent is a single JSONL event from `codex exec --json`.
 type codexEvent struct {
-	Type    string          `json:"type"`
-	Message string          `json:"message,omitempty"`
-	Error   *codexError     `json:"error,omitempty"`
+	Type    string      `json:"type"`
+	Message string      `json:"message,omitempty"`
+	Error   *codexError `json:"error,omitempty"`
 
 	// message_delta / text content
 	Delta string `json:"delta,omitempty"`
 
 	// tool call
-	ToolCallID   string          `json:"tool_call_id,omitempty"`
-	ToolName     string          `json:"tool_name,omitempty"`
-	ToolInput    json.RawMessage `json:"tool_input,omitempty"`
+	ToolCallID string          `json:"tool_call_id,omitempty"`
+	ToolName   string          `json:"tool_name,omitempty"`
+	ToolInput  json.RawMessage `json:"tool_input,omitempty"`
 
 	// tool result
 	ToolCallResultID string `json:"tool_call_result_id,omitempty"`
@@ -146,7 +146,7 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 
 	go func() {
 		defer close(events)
-		defer proc.Close()
+		defer func() { _ = proc.Close() }()
 
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
 		var turnNumber int
@@ -194,8 +194,8 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 				}
 			case "turn.failed":
 				out = types.Event{
-					Type:       types.EventError,
-					Error:      fmt.Errorf("codex turn failed: %s", evt.Error.Message),
+					Type:  types.EventError,
+					Error: fmt.Errorf("codex turn failed: %s", evt.Error.Message),
 				}
 			default:
 				continue

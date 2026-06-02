@@ -1,7 +1,8 @@
 // custom-provider 演示如何编写和注册自定义 provider。
 //
 // 使用方法:
-//   go run main.go
+//
+//	go run main.go
 package main
 
 import (
@@ -20,9 +21,9 @@ type EchoAgent struct{}
 
 func NewEchoAgent() *EchoAgent { return &EchoAgent{} }
 
-func (a *EchoAgent) Name() string         { return "Echo" }
+func (a *EchoAgent) Name() string             { return "Echo" }
 func (a *EchoAgent) Provider() types.Provider { return "echo" }
-func (a *EchoAgent) Close() error         { return nil }
+func (a *EchoAgent) Close() error             { return nil }
 
 func (a *EchoAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.Event, error) {
 	ch := make(chan types.Event, 4)

@@ -23,7 +23,7 @@ func mockClaudeBinary(t *testing.T, notifications []string) string {
 		content += fmt.Sprintf("echo '%s'\n", n)
 	}
 	content += "exec sleep 1\n"
-	os.WriteFile(script, []byte(content), 0o755)
+	_ = os.WriteFile(script, []byte(content), 0o755)
 	return script
 }
 
@@ -189,7 +189,7 @@ func TestBinaryNotFound(t *testing.T) {
 func TestBinaryAutoDetect(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "claude")
-	os.WriteFile(script, []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755)
+	_ = os.WriteFile(script, []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755)
 
 	t.Setenv("PATH", dir)
 
@@ -220,7 +220,7 @@ func TestContextCancellation(t *testing.T) {
 	content := "#!/bin/sh\n"
 	content += `echo '{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"hi"}]}}'` + "\n"
 	content += "exec sleep 10\n"
-	os.WriteFile(script, []byte(content), 0o755)
+	_ = os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
 	session := types.NewSession()

@@ -1,7 +1,8 @@
 // multi-turn 演示多 turn 对话中的上下文累积。
 //
 // 使用方法:
-//   go run main.go
+//
+//	go run main.go
 package main
 
 import (
@@ -17,7 +18,7 @@ import (
 
 func main() {
 	registry := agentwrapper.NewRegistry()
-	claude.RegisterIn(registry)
+	_ = claude.RegisterIn(registry)
 
 	agent, err := registry.Get("claude-code", nil)
 	if err != nil {

@@ -1,7 +1,8 @@
 // approval 演示交互式审批流程。
 //
 // 使用方法:
-//   go run main.go
+//
+//	go run main.go
 package main
 
 import (
@@ -17,7 +18,7 @@ import (
 
 func main() {
 	registry := agentwrapper.NewRegistry()
-	claude.RegisterIn(registry)
+	_ = claude.RegisterIn(registry)
 
 	agent, err := registry.Get("claude-code", nil)
 	if err != nil {

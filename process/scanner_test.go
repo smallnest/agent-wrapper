@@ -182,7 +182,7 @@ func TestAgentProcess_EchoHello(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(p.Stdout())
+	_, _ = buf.ReadFrom(p.Stdout())
 
 	p.Wait()
 
@@ -231,7 +231,7 @@ func TestAgentProcess_StderrCapture(t *testing.T) {
 	}
 
 	var stdout bytes.Buffer
-	stdout.ReadFrom(p.Stdout())
+	_, _ = stdout.ReadFrom(p.Stdout())
 
 	p.Wait()
 
@@ -260,7 +260,7 @@ func TestAgentProcess_WorkDir(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(p.Stdout())
+	_, _ = buf.ReadFrom(p.Stdout())
 	p.Wait()
 
 	output := strings.TrimSpace(buf.String())
@@ -285,7 +285,7 @@ func TestAgentProcess_EnvVars(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(p.Stdout())
+	_, _ = buf.ReadFrom(p.Stdout())
 	p.Wait()
 
 	if !strings.Contains(buf.String(), "TEST_AGENT_WRAPPER=hello_env") {

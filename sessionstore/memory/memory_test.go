@@ -91,7 +91,7 @@ func TestDelete(t *testing.T) {
 	store := New()
 
 	s, _ := store.Create()
-	store.Delete(s.ID)
+	_ = store.Delete(s.ID)
 
 	_, err := store.Get(s.ID)
 	if err == nil {
@@ -109,12 +109,12 @@ func TestList(t *testing.T) {
 
 	s1, _ := store.Create()
 	s1.Messages = append(s1.Messages, types.NewUserMessage("a"))
-	store.Save(s1)
+	_ = store.Save(s1)
 
 	s2, _ := store.Create()
 	s2.Messages = append(s2.Messages, types.NewUserMessage("b"))
 	s2.Messages = append(s2.Messages, types.NewUserMessage("c"))
-	store.Save(s2)
+	_ = store.Save(s2)
 
 	list := store.List()
 	if len(list) != 2 {
@@ -141,7 +141,7 @@ func TestSaveUpdatesUpdatedAt(t *testing.T) {
 	original := s.UpdatedAt
 
 	s.Messages = append(s.Messages, types.NewUserMessage("hi"))
-	store.Save(s)
+	_ = store.Save(s)
 
 	got, _ := store.Get(s.ID)
 	if !got.UpdatedAt.After(original) {
@@ -168,7 +168,7 @@ func TestConcurrentSaves(t *testing.T) {
 			for j := range appendsPer {
 				current, _ := store.Get(id)
 				current.Messages = append(current.Messages, types.NewUserMessage(fmt.Sprintf("msg-%d", j)))
-				store.Save(current)
+				_ = store.Save(current)
 			}
 		})
 	}
@@ -192,7 +192,7 @@ func TestConcurrentSavesSameSession(t *testing.T) {
 	for i := range 10 {
 		wg.Go(func() {
 			for j := range 100 {
-				store.Save(&types.Session{
+				_ = store.Save(&types.Session{
 					ID:       s.ID,
 					Messages: []types.Message{types.NewUserMessage(fmt.Sprintf("g%d-m%d", i, j))},
 				})
@@ -211,7 +211,7 @@ func TestGetReturnsCopy(t *testing.T) {
 	store := New()
 
 	s, _ := store.Create()
-	store.Save(s)
+	_ = store.Save(s)
 
 	got1, _ := store.Get(s.ID)
 	got2, _ := store.Get(s.ID)

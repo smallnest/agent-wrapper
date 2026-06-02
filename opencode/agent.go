@@ -75,15 +75,15 @@ func (a *OpenCodeAgent) resolveBinary() (string, error) {
 
 // opencodeEvent is a streaming event from `opencode run --format json`.
 type opencodeEvent struct {
-	Type    string              `json:"type"`
-	Content string              `json:"content,omitempty"`
-	Thinking string             `json:"thinking,omitempty"`
+	Type     string `json:"type"`
+	Content  string `json:"content,omitempty"`
+	Thinking string `json:"thinking,omitempty"`
 
 	// tool_use_start / tool_use_delta / tool_use_stop
-	ToolCall *opencodeToolCall  `json:"toolCall,omitempty"`
+	ToolCall *opencodeToolCall `json:"toolCall,omitempty"`
 
 	// complete event
-	Response *opencodeResponse  `json:"response,omitempty"`
+	Response *opencodeResponse `json:"response,omitempty"`
 
 	// error event
 	Error *opencodeErrorDetail `json:"error,omitempty"`
@@ -101,10 +101,10 @@ type opencodeToolCall struct {
 }
 
 type opencodeResponse struct {
-	Content      string               `json:"content,omitempty"`
-	ToolCalls    []opencodeToolCall   `json:"toolCalls,omitempty"`
-	Usage        *opencodeUsage       `json:"usage,omitempty"`
-	FinishReason string               `json:"finishReason,omitempty"`
+	Content      string             `json:"content,omitempty"`
+	ToolCalls    []opencodeToolCall `json:"toolCalls,omitempty"`
+	Usage        *opencodeUsage     `json:"usage,omitempty"`
+	FinishReason string             `json:"finishReason,omitempty"`
 }
 
 type opencodeUsage struct {
@@ -159,7 +159,7 @@ func (a *OpenCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan t
 
 	go func() {
 		defer close(events)
-		defer proc.Close()
+		defer func() { _ = proc.Close() }()
 
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
 		var turnNumber int

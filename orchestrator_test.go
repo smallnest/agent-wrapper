@@ -23,9 +23,9 @@ func newMockAgent(events []types.Event) *mockAgent {
 	return &mockAgent{events: events}
 }
 
-func (a *mockAgent) Name() string     { return "mock" }
+func (a *mockAgent) Name() string             { return "mock" }
 func (a *mockAgent) Provider() types.Provider { return "mock" }
-func (a *mockAgent) Close() error     { return nil }
+func (a *mockAgent) Close() error             { return nil }
 
 func (a *mockAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.Event, error) {
 	a.mu.Lock()

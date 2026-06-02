@@ -80,9 +80,9 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 		defer close(out)
 
 		var (
-			turnNumber   int
+			turnNumber    int
 			assistantText string
-			turnMessages []types.Message
+			turnMessages  []types.Message
 		)
 
 		forward := func(evt types.Event) {
@@ -106,7 +106,7 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 			turnMessages = nil
 
 			if o.store != nil {
-				o.store.Save(session)
+				_ = o.store.Save(session)
 			}
 		}
 

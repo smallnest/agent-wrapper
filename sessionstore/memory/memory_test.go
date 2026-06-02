@@ -163,16 +163,14 @@ func TestConcurrentSaves(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for i := range goroutines {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			id := sessions[idx].ID
+		wg.Go(func() {
+			id := sessions[i].ID
 			for j := range appendsPer {
 				current, _ := store.Get(id)
 				current.Messages = append(current.Messages, types.NewUserMessage(fmt.Sprintf("msg-%d", j)))
 				store.Save(current)
 			}
-		}(i)
+		})
 	}
 	wg.Wait()
 
@@ -192,16 +190,14 @@ func TestConcurrentSavesSameSession(t *testing.T) {
 	// Verifies no panics, no data races. Last write wins.
 	var wg sync.WaitGroup
 	for i := range 10 {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+		wg.Go(func() {
 			for j := range 100 {
 				store.Save(&types.Session{
 					ID:       s.ID,
 					Messages: []types.Message{types.NewUserMessage(fmt.Sprintf("g%d-m%d", i, j))},
 				})
 			}
-		}(i)
+		})
 	}
 	wg.Wait()
 

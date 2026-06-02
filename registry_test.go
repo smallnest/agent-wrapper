@@ -89,7 +89,7 @@ func TestRegistry_RegisterDuplicateNoOverwrite(t *testing.T) {
 func TestRegistry_RegisterDuplicateWithOverwrite(t *testing.T) {
 	r := NewRegistry()
 
-	r.Register("dup", func(_ map[string]any) (Agent, error) {
+	_ = r.Register("dup", func(_ map[string]any) (Agent, error) {
 		return &stubAgent{name: "first"}, nil
 	}, false)
 
@@ -109,10 +109,10 @@ func TestRegistry_RegisterDuplicateWithOverwrite(t *testing.T) {
 func TestRegistry_List(t *testing.T) {
 	r := NewRegistry()
 
-	r.Register("zebra", func(_ map[string]any) (Agent, error) {
+	_ = r.Register("zebra", func(_ map[string]any) (Agent, error) {
 		return &stubAgent{name: "Zebra"}, nil
 	}, false)
-	r.Register("alpha", func(_ map[string]any) (Agent, error) {
+	_ = r.Register("alpha", func(_ map[string]any) (Agent, error) {
 		return &stubAgent{name: "Alpha"}, nil
 	}, false)
 
@@ -134,7 +134,7 @@ func TestRegistry_List(t *testing.T) {
 func TestRegistry_Unregister(t *testing.T) {
 	r := NewRegistry()
 
-	r.Register("temp", func(_ map[string]any) (Agent, error) {
+	_ = r.Register("temp", func(_ map[string]any) (Agent, error) {
 		return &stubAgent{name: "Temp"}, nil
 	}, false)
 

@@ -55,7 +55,7 @@ func StartProcess(ctx context.Context, cfg ProcessConfig) (*AgentProcess, error)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		stdin.Close()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 
@@ -110,14 +110,14 @@ func (p *AgentProcess) terminate() {
 		}
 
 		if p.cmd.Process != nil {
-			p.cmd.Process.Signal(syscall.SIGTERM)
+			_ = p.cmd.Process.Signal(syscall.SIGTERM)
 		}
 
 		select {
 		case <-p.done:
 		case <-time.After(5 * time.Second):
 			if p.cmd.Process != nil {
-				p.cmd.Process.Signal(syscall.SIGKILL)
+				_ = p.cmd.Process.Signal(syscall.SIGKILL)
 			}
 			<-p.done
 		}

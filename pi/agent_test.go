@@ -22,7 +22,7 @@ func mockPiBinary(t *testing.T, lines []string) string {
 		content += fmt.Sprintf("echo '%s'\n", line)
 	}
 	content += "exec sleep 1\n"
-	os.WriteFile(script, []byte(content), 0o755)
+	_ = os.WriteFile(script, []byte(content), 0o755)
 	return script
 }
 
@@ -212,7 +212,7 @@ func TestBinaryNotFound(t *testing.T) {
 func TestBinaryAutoDetect(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "pi")
-	os.WriteFile(script, []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755)
+	_ = os.WriteFile(script, []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755)
 
 	t.Setenv("PATH", dir)
 
@@ -253,7 +253,7 @@ func TestContextCancellation(t *testing.T) {
 	content := "#!/bin/sh\n"
 	content += `echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"hi"}}'` + "\n"
 	content += "exec sleep 10\n"
-	os.WriteFile(script, []byte(content), 0o755)
+	_ = os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
 	session := types.NewSession()

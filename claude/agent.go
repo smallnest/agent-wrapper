@@ -83,16 +83,16 @@ type claudeEvent struct {
 	Message *claudeMessage `json:"message,omitempty"`
 
 	// result event
-	IsError   bool   `json:"is_error,omitempty"`
-	Result    string `json:"result,omitempty"`
-	StopReason string `json:"stop_reason,omitempty"`
-	Usage     *claudeUsage `json:"usage,omitempty"`
+	IsError    bool         `json:"is_error,omitempty"`
+	Result     string       `json:"result,omitempty"`
+	StopReason string       `json:"stop_reason,omitempty"`
+	Usage      *claudeUsage `json:"usage,omitempty"`
 }
 
 type claudeMessage struct {
-	ID      string           `json:"id"`
-	Role    string           `json:"role"`
-	Content []claudeContent  `json:"content"`
+	ID      string          `json:"id"`
+	Role    string          `json:"role"`
+	Content []claudeContent `json:"content"`
 }
 
 type claudeContent struct {
@@ -156,7 +156,7 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 
 	go func() {
 		defer close(events)
-		defer proc.Close()
+		defer func() { _ = proc.Close() }()
 
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
 

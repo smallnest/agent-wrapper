@@ -73,9 +73,9 @@ func (a *PiAgent) resolveBinary() (string, error) {
 
 // piEvent is a single JSONL event from `pi -p ... --mode json`.
 type piEvent struct {
-	Type    string          `json:"type"`
-	Version int             `json:"version,omitempty"`
-	ID      string          `json:"id,omitempty"`
+	Type    string `json:"type"`
+	Version int    `json:"version,omitempty"`
+	ID      string `json:"id,omitempty"`
 
 	// message_update event
 	AssistantMessageEvent *piAssistantMessageEvent `json:"assistantMessageEvent,omitempty"`
@@ -108,9 +108,9 @@ type piAssistantMessageEvent struct {
 }
 
 type piMessage struct {
-	Role    string       `json:"role"`
-	Content []piContent  `json:"content,omitempty"`
-	Usage   *piUsage     `json:"usage,omitempty"`
+	Role    string      `json:"role"`
+	Content []piContent `json:"content,omitempty"`
+	Usage   *piUsage    `json:"usage,omitempty"`
 }
 
 type piContent struct {
@@ -183,7 +183,7 @@ func (a *PiAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.E
 
 	go func() {
 		defer close(events)
-		defer proc.Close()
+		defer func() { _ = proc.Close() }()
 
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
 		var turnNumber int

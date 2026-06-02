@@ -1,7 +1,8 @@
 // basic 演示最简单的 agent-wrapper 调用。
 //
 // 使用方法:
-//   go run main.go
+//
+//	go run main.go
 package main
 
 import (

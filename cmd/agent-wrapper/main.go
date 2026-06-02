@@ -297,7 +297,7 @@ func parseRunFlags(args []string) *runFlags {
 		case "--max-turns":
 			i++
 			if i < len(args) {
-				fmt.Sscanf(args[i], "%d", &f.maxTurns)
+				_, _ = fmt.Sscanf(args[i], "%d", &f.maxTurns)
 			}
 		case "--working-dir":
 			i++
@@ -314,7 +314,7 @@ func parseRunFlags(args []string) *runFlags {
 		case "--budget-tokens":
 			i++
 			if i < len(args) {
-				fmt.Sscanf(args[i], "%d", &f.budgetTokens)
+				_, _ = fmt.Sscanf(args[i], "%d", &f.budgetTokens)
 			}
 		case "--session-id":
 			i++

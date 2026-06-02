@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Implementation Notes — Issue #0006</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FAF9F6;
+      color: #1a1a1a;
+      padding: 2.5rem 2rem;
+      line-height: 1.7;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 1.375rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .meta { color: #8B8680; font-size: 0.8125rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.375rem;
+      border-bottom: 1px solid #E8E4DE;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot.design { background: #5B8A72; }
+    .dot.deviation { background: #D97757; }
+    .dot.tradeoff { background: #4A6FA5; }
+    .dot.question { background: #D4A843; }
+    .item {
+      background: #FFFFFF;
+      border: 1px solid #E8E4DE;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .item h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.375rem; }
+    .item p { font-size: 0.8125rem; color: #4A4540; margin-bottom: 0.375rem; }
+    .label {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      margin-right: 0.375rem;
+    }
+    .label-design { background: #F5F8F6; color: #5B8A72; border: 1px solid #5B8A72; }
+    .label-deviation { background: #FFF5F0; color: #D97757; border: 1px solid #D97757; }
+    .label-tradeoff { background: #F0F4F8; color: #4A6FA5; border: 1px solid #4A6FA5; }
+    .label-question { background: #FDF8F0; color: #D4A843; border: 1px solid #D4A843; }
+    .none { color: #B0AAA4; font-style: italic; font-size: 0.8125rem; }
+    .footer { text-align: center; margin-top: 2.5rem; color: #B0AAA4; font-size: 0.6875rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Implementation Notes</h1>
+    <p class="meta">Issue <a href="https://github.com/smallnest/agent-wrapper/issues/6">#6</a> &mdash; [#8] CodexAgent &mdash; 2026-06-02</p>
+
+    <h2><span class="dot design"></span> Design Decisions</h2>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> RoleToolUse maps to assistant with tool_calls in OpenAI format</h3>
+      <p><strong>Ambiguity:</strong> The spec showed assistant messages with an <code>IsToolCall</code> flag for tool calls, but our <code>Message</code> type uses a separate <code>RoleToolUse</code> role instead.</p>
+      <p><strong>Choice:</strong> <code>RoleToolUse</code> messages convert to OpenAI format as <code>{"role": "assistant", "content": null, "tool_calls": [...]}</code>. This matches OpenAI's wire format where tool calls appear as assistant messages with a <code>tool_calls</code> array.</p>
+      <p><strong>Rationale:</strong> OpenAI's API doesn't have a separate role for tool calls — they're always embedded in assistant messages. Mapping our <code>RoleToolUse</code> to this format preserves the semantic distinction at our layer while matching the wire format exactly.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> System prompt prepended as first message</h3>
+      <p><strong>Ambiguity:</strong> The spec showed system messages in the messages array but <code>RunInput.SystemPrompt</code> is a separate field.</p>
+      <p><strong>Choice:</strong> If <code>SystemPrompt</code> is non-empty, prepend <code>{"role": "system", "content": "..."}</code> as the first message in the OpenAI request.</p>
+      <p><strong>Rationale:</strong> OpenAI Chat Completions expects the system message as a separate entry with role "system". Prepending ensures it comes first in the conversation without modifying the session's message history.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> SSE [DONE] signal and finish_reason both emit TurnEnd</h3>
+      <p><strong>Ambiguity:</strong> The spec didn't clarify when exactly TurnEnd fires for SSE streams — on [DONE] or on finish_reason.</p>
+      <p><strong>Choice:</strong> Both triggers emit TurnEnd. The [DONE] signal emits one with <code>stopReason: "end_turn"</code>. A non-empty <code>finish_reason</code> (e.g., "stop", "tool_calls") also emits TurnEnd.</p>
+      <p><strong>Rationale:</strong> OpenAI streams may include a <code>finish_reason</code> on the last chunk and then a separate <code>[DONE]</code>. Emitting TurnEnd on the first trigger ensures consumers get the event promptly. The turn counter increments for each trigger, so double-firing is harmless if the orchestrator checks.</p>
+    </div>
+
+    <h2><span class="dot deviation"></span> Deviations</h2>
+
+    <div class="item">
+      <h3><span class="label label-deviation">Deviation</span> Usage accumulated across chunks, not from a single final chunk</h3>
+      <p><strong>Spec said:</strong> Mock SSE [DONE] + usage → EventTurnEnd with TokenUsage.</p>
+      <p><strong>Implemented:</strong> Usage fields are accumulated from any SSE chunk that includes a <code>usage</code> object. The TurnEnd event carries the accumulated totals.</p>
+      <p><strong>Why:</strong> OpenAI's streaming API may emit usage on any chunk, not just the final one. Accumulating across all chunks ensures we capture the total regardless of when it appears. This matches OpenAI's documented behavior where usage is included when <code>stream_options: {"include_usage": true}</code> is set.</p>
+    </div>
+
+    <h2><span class="dot tradeoff"></span> Tradeoffs</h2>
+
+    <div class="item">
+      <h3><span class="label label-tradeoff">Tradeoff</span> Shell script mocks vs. structured SSE test server</h3>
+      <p><strong>Alternatives:</strong> (A) Shell scripts echoing SSE lines (current), (B) Go HTTP test server serving SSE, (C) httptest-based mock.</p>
+      <p><strong>Pros/Cons:</strong> (A) is simplest and directly tests the subprocess pipeline. (B/C) add HTTP layer complexity that's not needed since the SSEScanner reads from stdout, not HTTP.</p>
+      <p><strong>Winner:</strong> (A) — same approach as ClaudeCodeAgent, consistent across providers.</p>
+    </div>
+
+    <h2><span class="dot question"></span> Open Questions</h2>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should default model be configurable?</h3>
+      <p>Currently defaults to <code>"codex-mini-latest"</code> when no model is specified. The correct default depends on what the Codex CLI itself defaults to, which may change over time.</p>
+      <p><strong>Verify:</strong> Check if omitting <code>--model</code> entirely lets the CLI choose, and whether we should do that instead.</p>
+    </div>
+
+    <p class="footer">Generated by goal-workflow /note-it</p>
+  </div>
+</body>
+</html>

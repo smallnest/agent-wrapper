@@ -17,15 +17,13 @@ import (
 // Options configures an OpenCodeAgent.
 type Options struct {
 	BinaryPath string         // path to opencode binary; empty = auto-detect
-	Model      string         // model name passed via OPENCODE_MODEL env
+	Model      string         // model in provider/model format passed via -m
 	Extra      map[string]any // provider-specific parameters
 }
 
-// OpenCodeAgent drives the OpenCode CLI via non-interactive mode (-p -f json).
+// OpenCodeAgent drives the OpenCode CLI via `opencode run <message> --format json`.
 //
-// OpenCode does not expose a streaming stdio protocol. The agent runs in
-// non-interactive mode, collects the full stdout output, parses the JSON
-// response, and emits it as a single TextDelta + TurnEnd event pair.
+// OpenCode's --format json outputs streaming ProviderEvent JSON objects.
 type OpenCodeAgent struct {
 	opts   Options
 	binary string
@@ -75,9 +73,48 @@ func (a *OpenCodeAgent) resolveBinary() (string, error) {
 	return a.binary, nil
 }
 
-// opencodeResponse is the JSON output from `opencode -p ... -f json`.
+// opencodeEvent is a streaming event from `opencode run --format json`.
+type opencodeEvent struct {
+	Type    string              `json:"type"`
+	Content string              `json:"content,omitempty"`
+	Thinking string             `json:"thinking,omitempty"`
+
+	// tool_use_start / tool_use_delta / tool_use_stop
+	ToolCall *opencodeToolCall  `json:"toolCall,omitempty"`
+
+	// complete event
+	Response *opencodeResponse  `json:"response,omitempty"`
+
+	// error event
+	Error *opencodeErrorDetail `json:"error,omitempty"`
+
+	// session metadata
+	Timestamp int64  `json:"timestamp,omitempty"`
+	SessionID string `json:"sessionID,omitempty"`
+}
+
+type opencodeToolCall struct {
+	ID       string `json:"id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Input    string `json:"input,omitempty"`
+	Finished bool   `json:"finished,omitempty"`
+}
+
 type opencodeResponse struct {
-	Response string `json:"response"`
+	Content      string               `json:"content,omitempty"`
+	ToolCalls    []opencodeToolCall   `json:"toolCalls,omitempty"`
+	Usage        *opencodeUsage       `json:"usage,omitempty"`
+	FinishReason string               `json:"finishReason,omitempty"`
+}
+
+type opencodeUsage struct {
+	InputTokens  int `json:"inputTokens"`
+	OutputTokens int `json:"outputTokens"`
+}
+
+type opencodeErrorDetail struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
 }
 
 // RegisterIn replaces the opencode stub in the registry with a real factory.
@@ -99,26 +136,20 @@ func (a *OpenCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan t
 	if input.NewMessage != nil {
 		messages = append(messages, *input.NewMessage)
 	}
-	prompt := messagesToPrompt(messages)
+	prompt := lastUserMessage(messages)
 	if prompt == "" {
 		return nil, fmt.Errorf("opencode: no user message found in input")
 	}
 
-	args := []string{"-p", prompt, "-f", "json", "-q"}
-
-	env := map[string]string{}
+	args := []string{"run", prompt, "--format", "json"}
 	if a.opts.Model != "" {
-		env["OPENCODE_MODEL"] = a.opts.Model
-	}
-	if input.SystemPrompt != "" {
-		env["OPENCODE_SYSTEM_PROMPT"] = input.SystemPrompt
+		args = append(args, "-m", a.opts.Model)
 	}
 
 	proc, err := process.StartProcess(ctx, process.ProcessConfig{
 		Command: bin,
 		Args:    args,
 		WorkDir: input.WorkingDir,
-		Env:     env,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("start opencode process: %w", err)
@@ -128,42 +159,119 @@ func (a *OpenCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan t
 
 	go func() {
 		defer close(events)
+		defer proc.Close()
 
-		// Read all stdout — opencode blocks until complete in non-interactive mode.
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
-		var responseBody string
+		var turnNumber int
 
 		for scanner.Scan() {
 			frame := scanner.Frame()
-			var resp opencodeResponse
-			if err := json.Unmarshal(frame.Data, &resp); err == nil && resp.Response != "" {
-				responseBody = resp.Response
+			evt, ok := parseOpenCodeEvent(frame.Data)
+			if !ok {
+				continue
+			}
+			if evt.Type == types.EventTurnEnd {
+				turnNumber++
+				evt.TurnNumber = turnNumber
+			}
+			select {
+			case events <- evt:
+			case <-ctx.Done():
+				events <- types.Event{Type: types.EventError, Error: ctx.Err()}
+				return
+			}
+			if evt.Type == types.EventTurnEnd {
 				break
 			}
 		}
-
-		proc.Close()
-
-		if ctx.Err() != nil {
-			events <- types.Event{Type: types.EventError, Error: ctx.Err()}
-			return
-		}
-
-		if responseBody != "" {
-			events <- types.Event{Type: types.EventTextDelta, TextDelta: responseBody}
-		}
-
-		stopReason := "end_turn"
-		if responseBody == "" {
-			stopReason = "error"
-		}
-
-		events <- types.Event{
-			Type:       types.EventTurnEnd,
-			TurnNumber: 1,
-			StopReason: stopReason,
+		if err := scanner.Err(); err != nil {
+			select {
+			case events <- types.Event{Type: types.EventError, Error: err}:
+			default:
+			}
 		}
 	}()
 
 	return events, nil
+}
+
+func parseOpenCodeEvent(data []byte) (types.Event, bool) {
+	var raw opencodeEvent
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return types.Event{}, false
+	}
+
+	switch raw.Type {
+	case "content_delta":
+		if raw.Content != "" {
+			return types.Event{
+				Type:      types.EventTextDelta,
+				TextDelta: raw.Content,
+			}, true
+		}
+
+	case "tool_use_start":
+		if raw.ToolCall != nil {
+			var input json.RawMessage
+			if raw.ToolCall.Input != "" {
+				input = json.RawMessage(raw.ToolCall.Input)
+			}
+			return types.Event{
+				Type:       types.EventToolCall,
+				ToolCallID: raw.ToolCall.ID,
+				ToolName:   raw.ToolCall.Name,
+				ToolInput:  input,
+			}, true
+		}
+
+	case "tool_use_stop":
+		// Tool call completed — we already emitted at tool_use_start
+		return types.Event{}, false
+
+	case "complete":
+		evt := types.Event{
+			Type:       types.EventTurnEnd,
+			StopReason: "end_turn",
+		}
+		if raw.Response != nil {
+			switch raw.Response.FinishReason {
+			case "tool_use":
+				evt.StopReason = "tool_use"
+			case "length":
+				evt.StopReason = "length"
+			case "error":
+				evt.StopReason = "error"
+			}
+			if raw.Response.Usage != nil {
+				evt.TokenUsage = &types.TokenUsage{
+					InputTokens:  raw.Response.Usage.InputTokens,
+					OutputTokens: raw.Response.Usage.OutputTokens,
+					TotalTokens:  raw.Response.Usage.InputTokens + raw.Response.Usage.OutputTokens,
+				}
+			}
+		}
+		return evt, true
+
+	case "error":
+		msg := "unknown error"
+		if raw.Error != nil {
+			msg = raw.Error.Message
+		}
+		return types.Event{
+			Type:  types.EventError,
+			Error: fmt.Errorf("opencode: %s", msg),
+		}, true
+	}
+
+	return types.Event{}, false
+}
+
+// lastUserMessage returns the last user message content from the message list.
+func lastUserMessage(msgs []types.Message) string {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == types.RoleUser {
+			return msgs[i].Content
+		}
+	}
+	return ""
 }

@@ -12,45 +12,35 @@ import (
 	"github.com/smallnest/agent-wrapper/types"
 )
 
-// mockOpenCodeBinary creates a temporary shell script that simulates
-// `opencode -p <prompt> -f json -q` output.
-func mockOpenCodeBinary(t *testing.T, response string) string {
+// mockOpenCodeBinary creates a shell script that outputs JSONL events
+// matching the `opencode run --format json` protocol.
+func mockOpenCodeBinary(t *testing.T, jsonlLines []string) string {
 	t.Helper()
 	dir := t.TempDir()
 	script := filepath.Join(dir, "opencode")
 	content := "#!/bin/sh\n"
-	// opencode outputs a single JSON line to stdout
-	content += "echo '" + response + "'\n"
+	for _, line := range jsonlLines {
+		content += fmt.Sprintf("echo '%s'\n", line)
+	}
+	content += "exec sleep 1\n"
 	os.WriteFile(script, []byte(content), 0o755)
 	return script
 }
 
-// mockOpenCodeBinaryWithDelay creates a mock binary that sleeps before responding.
-func mockOpenCodeBinaryWithDelay(t *testing.T, response string, delay time.Duration) string {
-	t.Helper()
-	dir := t.TempDir()
-	script := filepath.Join(dir, "opencode")
-	content := "#!/bin/sh\n"
-	content += "sleep " + fmtDuration(delay) + "\n"
-	content += "echo '" + response + "'\n"
-	os.WriteFile(script, []byte(content), 0o755)
-	return script
-}
-
-func fmtDuration(d time.Duration) string {
-	return fmt.Sprintf("%.1f", d.Seconds())
-}
-
-func TestRunTextResponse(t *testing.T) {
-	bin := mockOpenCodeBinary(t, `{"response":"Hello, I can help with that."}`)
+func TestTextDelta(t *testing.T) {
+	bin := mockOpenCodeBinary(t, []string{
+		`{"type":"content_start"}`,
+		`{"type":"content_delta","content":"Hello, "}`,
+		`{"type":"content_delta","content":"world!"}`,
+		`{"type":"content_stop"}`,
+		`{"type":"complete","response":{"content":"Hello, world!","usage":{"inputTokens":10,"outputTokens":20},"finishReason":"stop"}}`,
+	})
 
 	agent := New(Options{BinaryPath: bin})
 	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("help me"))
+	session.Messages = append(session.Messages, types.NewUserMessage("hi"))
 
-	events, err := agent.Run(context.Background(), types.RunInput{
-		Session: session,
-	})
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -69,82 +59,99 @@ func TestRunTextResponse(t *testing.T) {
 			if evt.TurnNumber != 1 {
 				t.Errorf("expected turnNumber 1, got %d", evt.TurnNumber)
 			}
-		}
-	}
-
-	if len(textDeltas) != 1 {
-		t.Fatalf("expected 1 text_delta event, got %d", len(textDeltas))
-	}
-	if textDeltas[0] != "Hello, I can help with that." {
-		t.Errorf("expected 'Hello, I can help with that.', got %q", textDeltas[0])
-	}
-	if turnEnds != 1 {
-		t.Errorf("expected 1 turn_end, got %d", turnEnds)
-	}
-}
-
-func TestRunWithNewMessage(t *testing.T) {
-	bin := mockOpenCodeBinary(t, `{"response":"Got it."}`)
-
-	agent := New(Options{BinaryPath: bin})
-	session := types.NewSession()
-
-	events, err := agent.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("new message"); return &m }(),
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-
-	var gotResponse bool
-	for evt := range events {
-		if evt.Type == types.EventTextDelta && evt.TextDelta == "Got it." {
-			gotResponse = true
-		}
-	}
-	if !gotResponse {
-		t.Error("expected text_delta with 'Got it.'")
-	}
-}
-
-func TestRunEmptyResponse(t *testing.T) {
-	bin := mockOpenCodeBinary(t, `{"response":""}`)
-
-	agent := New(Options{BinaryPath: bin})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("hello"))
-
-	events, err := agent.Run(context.Background(), types.RunInput{
-		Session: session,
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-
-	var turnEnds int
-	for evt := range events {
-		if evt.Type == types.EventTurnEnd {
-			turnEnds++
-			if evt.StopReason != "error" {
-				t.Errorf("expected stopReason 'error' for empty response, got %q", evt.StopReason)
+			if evt.TokenUsage == nil {
+				t.Fatal("expected TokenUsage")
+			}
+			if evt.TokenUsage.TotalTokens != 30 {
+				t.Errorf("expected 30 total tokens, got %d", evt.TokenUsage.TotalTokens)
 			}
 		}
 	}
+
+	if len(textDeltas) != 2 {
+		t.Fatalf("expected 2 text_delta events, got %d", len(textDeltas))
+	}
+	if textDeltas[0] != "Hello, " {
+		t.Errorf("text delta 0: expected 'Hello, ', got %q", textDeltas[0])
+	}
+	if textDeltas[1] != "world!" {
+		t.Errorf("text delta 1: expected 'world!', got %q", textDeltas[1])
+	}
 	if turnEnds != 1 {
 		t.Errorf("expected 1 turn_end, got %d", turnEnds)
 	}
 }
 
-func TestRunNoUserMessage(t *testing.T) {
-	agent := New(Options{BinaryPath: "/fake/opencode"})
-	session := types.NewSession()
-
-	_, err := agent.Run(context.Background(), types.RunInput{
-		Session: session,
+func TestToolUse(t *testing.T) {
+	bin := mockOpenCodeBinary(t, []string{
+		`{"type":"content_delta","content":"Let me check."}`,
+		`{"type":"tool_use_start","toolCall":{"id":"call_1","name":"read","finished":false}}`,
+		`{"type":"tool_use_delta","toolCall":{"id":"call_1","input":"{\"path\":\"main.go\"}"}}`,
+		`{"type":"tool_use_stop","toolCall":{"id":"call_1"}}`,
+		`{"type":"complete","response":{"toolCalls":[{"id":"call_1","name":"read","input":"{\"path\":\"main.go\"}"}],"finishReason":"tool_use","usage":{"inputTokens":5,"outputTokens":10}}}`,
 	})
+
+	agent := New(Options{BinaryPath: bin})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("check"))
+
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	var toolCalls []types.Event
+	for evt := range events {
+		if evt.Type == types.EventToolCall {
+			toolCalls = append(toolCalls, evt)
+		}
+	}
+
+	if len(toolCalls) != 1 {
+		t.Fatalf("expected 1 tool_call event, got %d", len(toolCalls))
+	}
+	tc := toolCalls[0]
+	if tc.ToolCallID != "call_1" {
+		t.Errorf("expected call ID 'call_1', got %q", tc.ToolCallID)
+	}
+	if tc.ToolName != "read" {
+		t.Errorf("expected tool name 'read', got %q", tc.ToolName)
+	}
+}
+
+func TestErrorEvent(t *testing.T) {
+	bin := mockOpenCodeBinary(t, []string{
+		`{"type":"error","error":{"name":"AuthError","message":"API key missing"}}`,
+	})
+
+	agent := New(Options{BinaryPath: bin})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for evt := range events {
+		if evt.Type == types.EventError {
+			if evt.Error == nil {
+				t.Fatal("expected error in event")
+			}
+			return
+		}
+	}
+	t.Fatal("never received error event")
+}
+
+func TestBinaryNotFound(t *testing.T) {
+	agent := New(Options{BinaryPath: "/nonexistent/path/opencode"})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+
+	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err == nil {
-		t.Fatal("expected error when no user message found")
+		t.Fatal("expected error for missing binary")
 	}
 }
 
@@ -176,47 +183,44 @@ func TestBinaryAutoDetectNotFound(t *testing.T) {
 	}
 }
 
-func TestBinaryNotFound(t *testing.T) {
-	agent := New(Options{BinaryPath: "/nonexistent/path/opencode"})
+func TestNoUserMessage(t *testing.T) {
+	agent := New(Options{BinaryPath: "/fake/opencode"})
 	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
 	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
 	if err == nil {
-		t.Fatal("expected error for missing binary")
+		t.Fatal("expected error when no user message found")
 	}
 }
 
-func TestContextCancellationClosesChannel(t *testing.T) {
-	// Verify that cancelling the context eventually closes the event channel.
-	// The mock binary sleeps 2 seconds — we cancel after 200ms.
-	bin := mockOpenCodeBinaryWithDelay(t, `{"response":"done"}`, 2*time.Second)
+func TestContextCancellation(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "opencode")
+	content := "#!/bin/sh\n"
+	content += `echo '{"type":"content_delta","content":"hi"}'` + "\n"
+	content += "exec sleep 10\n"
+	os.WriteFile(script, []byte(content), 0o755)
 
-	agent := New(Options{BinaryPath: bin})
+	agent := New(Options{BinaryPath: script})
 	session := types.NewSession()
 	session.Messages = append(session.Messages, types.NewUserMessage("test"))
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
+	defer cancel()
 
 	events, err := agent.Run(ctx, types.RunInput{Session: session})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	// Cancel after a short delay.
-	time.AfterFunc(200*time.Millisecond, cancel)
-
-	// Drain events; channel must close.
-	timeout := time.After(15 * time.Second)
-	for {
-		select {
-		case _, ok := <-events:
-			if !ok {
-				return // channel closed — expected
-			}
-		case <-timeout:
-			t.Fatal("event channel did not close after context cancellation")
+	var gotEvent bool
+	for evt := range events {
+		if evt.Type == types.EventTextDelta {
+			gotEvent = true
 		}
+	}
+	if !gotEvent {
+		t.Error("expected at least one text_delta before cancellation")
 	}
 }
 

@@ -22,7 +22,7 @@ type Options struct {
 	Extra      map[string]any // provider-specific parameters
 }
 
-// PiAgent drives the Pi CLI via --mode rpc JSONL protocol.
+// PiAgent drives the Pi CLI via `-p --mode json` non-interactive JSONL protocol.
 type PiAgent struct {
 	opts   Options
 	binary string
@@ -71,33 +71,68 @@ func (a *PiAgent) resolveBinary() (string, error) {
 	return a.binary, nil
 }
 
-// rpcCommand is a JSONL command sent to pi --mode rpc.
-type rpcCommand struct {
-	ID      string `json:"id,omitempty"`
-	Type    string `json:"type"`
-	Message string `json:"message,omitempty"`
+// piEvent is a single JSONL event from `pi -p ... --mode json`.
+type piEvent struct {
+	Type    string          `json:"type"`
+	Version int             `json:"version,omitempty"`
+	ID      string          `json:"id,omitempty"`
+
+	// message_update event
+	AssistantMessageEvent *piAssistantMessageEvent `json:"assistantMessageEvent,omitempty"`
+
+	// tool_execution_start / tool_execution_end
+	ToolCallID string          `json:"toolCallId,omitempty"`
+	ToolName   string          `json:"toolName,omitempty"`
+	Data       json.RawMessage `json:"data,omitempty"`
+	IsError    bool            `json:"isError,omitempty"`
+
+	// turn_end
+	TurnIndex   int            `json:"turnIndex,omitempty"`
+	ToolResults []piToolResult `json:"toolResults,omitempty"`
+
+	// message_start / message_end / turn_end contain a message object
+	Message *piMessage `json:"message,omitempty"`
+
+	// agent_end
+	Messages []piMessage `json:"messages,omitempty"`
+
+	// error
+	Error *piErrorDetail `json:"error,omitempty"`
 }
 
-// rawEvent is the envelope for any JSONL event from pi.
-type rawEvent struct {
-	Type    string          `json:"type"`
-	ID      string          `json:"id,omitempty"`
-	Success bool            `json:"success,omitempty"`
-	Command string          `json:"command,omitempty"`
-	Data    json.RawMessage `json:"data,omitempty"`
-	Error   string          `json:"error,omitempty"`
+type piAssistantMessageEvent struct {
+	Type         string `json:"type"`
+	ContentIndex int    `json:"contentIndex"`
+	Delta        string `json:"delta,omitempty"`
+	Content      string `json:"content,omitempty"`
+}
 
-	// Fields from agent session events
-	AssistantMessageEvent *struct {
-		Type         string `json:"type"`
-		ContentIndex int    `json:"contentIndex"`
-		Delta        string `json:"delta"`
-	} `json:"assistantMessageEvent,omitempty"`
+type piMessage struct {
+	Role    string       `json:"role"`
+	Content []piContent  `json:"content,omitempty"`
+	Usage   *piUsage     `json:"usage,omitempty"`
+}
 
-	TurnIndex   int `json:"turnIndex,omitempty"`
-	ToolCallID  string `json:"toolCallId,omitempty"`
-	ToolName    string `json:"toolName,omitempty"`
-	IsError     bool   `json:"isError,omitempty"`
+type piContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type piUsage struct {
+	Input       int `json:"input"`
+	Output      int `json:"output"`
+	TotalTokens int `json:"totalTokens"`
+}
+
+type piToolResult struct {
+	ToolCallID string `json:"toolCallId"`
+	Output     string `json:"output"`
+	IsError    bool   `json:"isError"`
+}
+
+type piErrorDetail struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
 }
 
 // RegisterIn replaces the pi-agent stub in the registry with a real factory.
@@ -107,14 +142,24 @@ func RegisterIn(r *agentwrapper.Registry) error {
 	}, true)
 }
 
-// Run starts a pi subprocess in RPC mode and returns an event channel.
+// Run starts a pi subprocess in non-interactive JSON mode and returns an event channel.
 func (a *PiAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.Event, error) {
 	bin, err := a.resolveBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	args := []string{"--mode", "rpc", "--no-session"}
+	// Build the prompt from session messages or new message.
+	messages := input.Session.Messages
+	if input.NewMessage != nil {
+		messages = append(messages, *input.NewMessage)
+	}
+	prompt := lastUserMessage(messages)
+	if prompt == "" {
+		return nil, fmt.Errorf("pi: no user message found in input")
+	}
+
+	args := []string{"-p", prompt, "--mode", "json", "--no-session"}
 	if a.opts.Model != "" {
 		args = append(args, "--model", a.opts.Model)
 	}
@@ -123,9 +168,6 @@ func (a *PiAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.E
 	}
 	if input.SystemPrompt != "" {
 		args = append(args, "--system-prompt", input.SystemPrompt)
-	}
-	if input.WorkingDir != "" {
-		args = append(args, "--cwd", input.WorkingDir)
 	}
 
 	proc, err := process.StartProcess(ctx, process.ProcessConfig{
@@ -137,32 +179,6 @@ func (a *PiAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.E
 		return nil, fmt.Errorf("start pi process: %w", err)
 	}
 
-	// Build the user message from NewMessage or session history.
-	userMsg := ""
-	if input.NewMessage != nil {
-		userMsg = input.NewMessage.Content
-	} else if len(input.Session.Messages) > 0 {
-		last := input.Session.Messages[len(input.Session.Messages)-1]
-		if last.Role == types.RoleUser {
-			userMsg = last.Content
-		}
-	}
-
-	cmd := rpcCommand{
-		ID:      "1",
-		Type:    "prompt",
-		Message: userMsg,
-	}
-	cmdBytes, err := json.Marshal(cmd)
-	if err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("marshal prompt command: %w", err)
-	}
-	if _, err := fmt.Fprintf(proc.Stdin(), "%s\n", cmdBytes); err != nil {
-		proc.Close()
-		return nil, fmt.Errorf("write prompt command: %w", err)
-	}
-
 	events := make(chan types.Event, 64)
 
 	go func() {
@@ -170,15 +186,17 @@ func (a *PiAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.E
 		defer proc.Close()
 
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
+		var turnNumber int
+
 		for scanner.Scan() {
 			frame := scanner.Frame()
-			evt, ok := parseEvent(frame.Data)
+			evt, ok := parsePiEvent(frame.Data)
 			if !ok {
 				continue
 			}
-			if evt.Type == types.EventTurnEnd && evt.StopReason == "agent_end" {
-				// agent_end means the session ended, don't forward as turn_end
-				continue
+			if evt.Type == types.EventTurnEnd {
+				turnNumber++
+				evt.TurnNumber = turnNumber
 			}
 			select {
 			case events <- evt:
@@ -201,8 +219,8 @@ func (a *PiAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.E
 	return events, nil
 }
 
-func parseEvent(data []byte) (types.Event, bool) {
-	var raw rawEvent
+func parsePiEvent(data []byte) (types.Event, bool) {
+	var raw piEvent
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return types.Event{}, false
 	}
@@ -219,8 +237,6 @@ func parseEvent(data []byte) (types.Event, bool) {
 				TextDelta: raw.AssistantMessageEvent.Delta,
 			}, true
 		case "toolcall_delta":
-			// Accumulate tool call deltas — we emit the tool call when we get
-			// a tool_execution_start event with the full name and ID.
 			return types.Event{}, false
 		}
 
@@ -232,7 +248,6 @@ func parseEvent(data []byte) (types.Event, bool) {
 		}, true
 
 	case "tool_execution_end":
-		// Pi sends tool results as separate events.
 		resultJSON, _ := json.Marshal(raw.Data)
 		return types.Event{
 			Type:             types.EventToolResult,
@@ -242,23 +257,43 @@ func parseEvent(data []byte) (types.Event, bool) {
 		}, true
 
 	case "turn_end":
-		return types.Event{
+		evt := types.Event{
 			Type:       types.EventTurnEnd,
-			TurnNumber: raw.TurnIndex + 1,
 			StopReason: "end_turn",
-		}, true
+		}
+		if raw.Message != nil && raw.Message.Usage != nil {
+			evt.TokenUsage = &types.TokenUsage{
+				InputTokens:  raw.Message.Usage.Input,
+				OutputTokens: raw.Message.Usage.Output,
+				TotalTokens:  raw.Message.Usage.TotalTokens,
+			}
+		}
+		return evt, true
 
 	case "agent_end":
-		return types.Event{
-			Type:       types.EventTurnEnd,
-			TurnNumber: 0,
-			StopReason: "agent_end",
-		}, true
-
-	case "response":
-		// Command response — skip
+		// Session complete — we already emitted turn_end above, so skip.
 		return types.Event{}, false
+
+	case "error":
+		msg := "unknown error"
+		if raw.Error != nil {
+			msg = raw.Error.Message
+		}
+		return types.Event{
+			Type:  types.EventError,
+			Error: fmt.Errorf("pi: %s", msg),
+		}, true
 	}
 
 	return types.Event{}, false
+}
+
+// lastUserMessage returns the last user message content from the message list.
+func lastUserMessage(msgs []types.Message) string {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == types.RoleUser {
+			return msgs[i].Content
+		}
+	}
+	return ""
 }

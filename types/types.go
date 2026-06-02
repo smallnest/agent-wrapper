@@ -170,3 +170,14 @@ type TokenUsage struct {
 	OutputTokens int `json:"output_tokens"`
 	TotalTokens  int `json:"total_tokens"`
 }
+
+// RunInput 是一次 agent 调用的全部输入。
+type RunInput struct {
+	Session      *Session
+	NewMessage   *Message
+	SystemPrompt string
+	WorkingDir   string
+	MaxTurns     int
+	AllowedTools []string
+	Extra        map[string]any
+}

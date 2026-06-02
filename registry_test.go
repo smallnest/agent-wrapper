@@ -14,7 +14,7 @@ type stubAgent struct {
 
 func (s *stubAgent) Name() string             { return s.name }
 func (s *stubAgent) Provider() types.Provider { return s.provider }
-func (s *stubAgent) Run(_ context.Context, _ RunInput) (<-chan types.Event, error) {
+func (s *stubAgent) Run(_ context.Context, _ types.RunInput) (<-chan types.Event, error) {
 	return nil, nil
 }
 func (s *stubAgent) Close() error { return nil }

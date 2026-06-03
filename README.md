@@ -200,6 +200,8 @@ agent-wrapper 不采用 ACP 协议，而是直接驱动 agent CLI 子进程。AC
 
 agent-wrapper 的策略是 **"不协议化，直接包装"**——agent 的 CLI 就是 API。每个 agent 的子进程 stdout 直接打通到 `<-chan types.Event`，没有中间人。
 
+如果仍想使用 ACP 协议，推荐 openclaw（Peter Steinberger）的 [acpx](https://acpx.sh/)——一个 ACP 命令行客户端，`npm install -g acpx` 即装即用，支持 Codex、Claude、Pi、Gemini 等 ACP bot。
+
 ## License
 
 MIT

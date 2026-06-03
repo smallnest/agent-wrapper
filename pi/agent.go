@@ -300,4 +300,3 @@ func parsePiEvent(data []byte) (types.Event, bool) {
 
 	return types.Event{}, false
 }
-

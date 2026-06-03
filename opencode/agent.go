@@ -263,4 +263,3 @@ func parseOpenCodeEvent(data []byte) (types.Event, bool) {
 
 	return types.Event{}, false
 }
-

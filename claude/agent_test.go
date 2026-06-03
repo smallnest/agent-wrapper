@@ -37,7 +37,6 @@ func TestNotifyTextDelta(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	
 
 	events, err := agent.Run(context.Background(), types.RunInput{
 		Prompt: "hi",
@@ -88,7 +87,6 @@ func TestNotifyToolUse(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	
 
 	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
@@ -121,7 +119,6 @@ func TestNotifyToolResult(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	
 
 	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
@@ -154,7 +151,6 @@ func TestNotifyTurnEnd(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	
 
 	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
@@ -174,7 +170,6 @@ func TestNotifyTurnEnd(t *testing.T) {
 
 func TestBinaryNotFound(t *testing.T) {
 	agent := New(Options{BinaryPath: "/nonexistent/path/claude"})
-	
 
 	_, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err == nil {
@@ -219,7 +214,6 @@ func TestContextCancellation(t *testing.T) {
 	_ = os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
-	
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 	defer cancel()
@@ -251,7 +245,6 @@ func TestContextLengthError(t *testing.T) {
 	_ = os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
-	
 
 	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {

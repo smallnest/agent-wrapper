@@ -236,4 +236,3 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 
 	return events, nil
 }
-

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Implementation Notes — Issue #0025</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #FAF9F6;
+      color: #1a1a1a;
+      padding: 2.5rem 2rem;
+      line-height: 1.7;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 1.375rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .meta { color: #8B8680; font-size: 0.8125rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.375rem;
+      border-bottom: 1px solid #E8E4DE;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+    .dot.design { background: #5B8A72; }
+    .dot.deviation { background: #D97757; }
+    .dot.tradeoff { background: #4A6FA5; }
+    .dot.question { background: #D4A843; }
+    .item {
+      background: #FFFFFF;
+      border: 1px solid #E8E4DE;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .item h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.375rem; }
+    .item p { font-size: 0.8125rem; color: #4A4540; margin-bottom: 0.375rem; }
+    .label {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      margin-right: 0.375rem;
+    }
+    .label-design { background: #F5F8F6; color: #5B8A72; border: 1px solid #5B8A72; }
+    .label-deviation { background: #FFF5F0; color: #D97757; border: 1px solid #D97757; }
+    .label-tradeoff { background: #F0F4F8; color: #4A6FA5; border: 1px solid #4A6FA5; }
+    .label-question { background: #FDF8F0; color: #D4A843; border: 1px solid #D4A843; }
+    .none { color: #B0AAA4; font-style: italic; font-size: 0.8125rem; }
+    .footer {
+      text-align: center; margin-top: 2.5rem; color: #B0AAA4;
+      font-size: 0.6875rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Implementation Notes</h1>
+    <p class="meta">Issue <a href="https://github.com/smallnest/agent-wrapper/issues/25">#0025</a> &mdash; Context compression: define error types and compression contract &mdash; 2026-06-03</p>
+
+    <h2><span class="dot design"></span> Design Decisions</h2>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> ContextLengthExceededError as a struct with Unwrap rather than a simple string error</h3>
+      <p><strong>Ambiguity:</strong> The PRD said "Add ContextLengthExceededError type implementing error interface" without specifying whether it should wrap underlying errors.</p>
+      <p><strong>Choice:</strong> Defined <code>ContextLengthExceededError</code> as a struct with an <code>Err error</code> field and <code>Unwrap() error</code> method, enabling <code>errors.Is</code> and <code>errors.As</code> traversal.</p>
+      <p><strong>Rationale:</strong> The original subprocess error (stderr output, exit code) carries diagnostic value. Wrapping preserves it while adding semantic type information. Callers can still access the root cause via <code>errors.Is</code>.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> IsContextLengthExceeded checks typed error first, then falls back to keyword matching</h3>
+      <p><strong>Ambiguity:</strong> The PRD specified "两者结合：优先用类型化错误，兜底用字符串匹配" but didn't specify whether both paths should be checked on every call.</p>
+      <p><strong>Choice:</strong> <code>errors.As</code> is tried first (cheap, O(1) unwrap chain). If it fails, the full error message is lowercased and scanned for 5 known keywords.</p>
+      <p><strong>Rationale:</strong> Type checking is always correct (no false positives). Keyword matching is a best-effort fallback for providers whose error formats we haven't yet typed. The short-circuit avoids unnecessary string operations when a typed error is already present.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-design">Decision</span> ContextCompressor placed in agentwrapper root package, not a sub-package</h3>
+      <p><strong>Ambiguity:</strong> The PRD said "interface lives in package agentwrapper" but said nothing about sub-package organization.</p>
+      <p><strong>Choice:</strong> Defined <code>ContextCompressor</code> in the root <code>agentwrapper</code> package alongside <code>Orchestrator</code>, <code>ApprovalHandler</code>, and <code>BudgetHandler</code>.</p>
+      <p><strong>Rationale:</strong> Consistent with existing patterns — all extension interfaces live in the root. A separate <code>compressor/</code> sub-package would add import friction for the single-method interface that orchestrator directly consumes.</p>
+    </div>
+
+    <h2><span class="dot deviation"></span> Deviations</h2>
+    <p class="none">None — implementation followed the PRD as written. All three deliverables (typed error, detection helper, Compressor interface) match US-001 and US-002 acceptance criteria exactly.</p>
+
+    <h2><span class="dot tradeoff"></span> Tradeoffs</h2>
+
+    <div class="item">
+      <h3><span class="label label-tradeoff">Tradeoff</span> Hardcoded keyword list vs. configurable matchers</h3>
+      <p><strong>Alternatives considered:</strong> (A) Make the keyword list a parameter to <code>IsContextLengthExceeded</code>. (B) Allow callers to register custom error patterns via callback. (C) Hardcode a small, curated list.</p>
+      <p><strong>Pros/cons:</strong> (A) Flexibility but complicates the function signature and every call site. (B) Maximum extensibility but over-engineered for a detection helper. (C) Simple, zero-config, covers 95%+ of real-world error messages from known providers.</p>
+      <p><strong>Why (C) won:</strong> V1 scope explicitly says "不对非上下文超限的错误进行重试". Adding a config system for 5 strings before we've validated the approach is premature. If keywords need tuning, we change the list in one place.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-tradeoff">Tradeoff</span> "too long" keyword: coverage vs. false-positive risk</h3>
+      <p><strong>Alternatives considered:</strong> Include "too long" as a keyword vs. omit it.</p>
+      <p><strong>Pros/cons:</strong> OpenAI and Gemini both use "too long" in their context-length error messages. But "too long" is also a common English phrase that could appear in unrelated errors (e.g., "request timeout: took too long").</p>
+      <p><strong>Why included:</strong> The downside of a false positive is an unnecessary compression+retry cycle, which is cheap and idempotent. The downside of a false negative is a hard failure that could have been recovered. In harness engineering, prioritize recovery.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-tradeoff">Tradeoff</span> Single Compress method vs. Reduce/Expand pair</h3>
+      <p><strong>Alternatives considered:</strong> (A) <code>Compress([]Message) []Message</code>. (B) <code>Reduce([]Message) []Message</code> + <code>Expand(summary, []Message) []Message</code> pair.</p>
+      <p><strong>Pros/cons:</strong> (B) enables two-phase compression where the orchestrator stores a compressed prefix and re-expands it later. This is useful for long-running sessions but requires session schema changes.</p>
+      <p><strong>Why (A) won:</strong> V1 retry loop is stateless — compress, retry, succeed, done. No need to preserve compressed state across turns. A single method keeps the interface minimal and all compressor implementations trivial.</p>
+    </div>
+
+    <h2><span class="dot question"></span> Open Questions</h2>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should keywords be configurable per provider?</h3>
+      <p><strong>Assumption:</strong> The same 5 keywords work for all 4 agents (Claude, Codex, Pi, OpenCode). If one provider uses a completely different error format (e.g., "prompt_too_large" with underscores), <code>IsContextLengthExceeded</code> won't detect it.</p>
+      <p><strong>Action:</strong> After #27 (agent detection) is implemented, verify that each provider's actual stderr output is covered by the current keyword list. If gaps exist, add keywords or make the list injectable via a variadic option.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should "too long" be narrowed to reduce false-positive risk?</h3>
+      <p><strong>Assumption:</strong> "too long" alone is sufficient without qualifying context. A stricter alternative would be two-word pairs like "too long." immediately followed by "context" or "token" on the same line.</p>
+      <p><strong>Action:</strong> Monitor for false positives during integration testing (#28, #29). If any non-context-length errors trigger compression, tighten the match to require co-occurrence with "context" or "token" in the same error message.</p>
+    </div>
+
+    <div class="item">
+      <h3><span class="label label-question">Question</span> Should Compress accept context.Context for cancellation?</h3>
+      <p><strong>Assumption:</strong> Compressors are stateless and fast — sliding window is O(1) slice operations, naive summary is O(n) string slicing. No I/O, no LLM calls in V1.</p>
+      <p><strong>Action:</strong> Keep the signature as-is for V1. If a future Summarizer calls an external LLM (per US-004 user-injected summarizer), add a <code>context.Context</code> parameter to the interface then (breaking change, but controlled by us).</p>
+    </div>
+
+    <p class="footer">Generated by goal-workflow /note-it</p>
+  </div>
+</body>
+</html>

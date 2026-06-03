@@ -609,3 +609,73 @@ func TestOrchestratorNoNewMessage(t *testing.T) {
 		t.Errorf("expected assistant 'response', got role=%v content=%q", msgs[1].Role, msgs[1].Content)
 	}
 }
+
+func TestRunSyncSuccess(t *testing.T) {
+	events := []types.Event{
+		{Type: types.EventTextDelta, TextDelta: "Hello"},
+		{Type: types.EventTextDelta, TextDelta: " world"},
+		{Type: types.EventTurnEnd, TurnNumber: 1, StopReason: "end_turn",
+			TokenUsage: &types.TokenUsage{InputTokens: 10, OutputTokens: 5, TotalTokens: 15}},
+	}
+
+	agent := newMockAgent(events)
+	store := newMockStore()
+	session := types.NewSession()
+
+	orch := NewOrchestrator(agent, store)
+	result, err := orch.RunSync(context.Background(), types.RunInput{
+		Session:    session,
+		NewMessage: func() *types.Message { m := types.NewUserMessage("go"); return &m }(),
+	})
+	if err != nil {
+		t.Fatalf("RunSync: %v", err)
+	}
+	if result.Text != "Hello world" {
+		t.Errorf("expected 'Hello world', got %q", result.Text)
+	}
+	if result.Usage == nil {
+		t.Fatal("expected non-nil Usage")
+	}
+	if result.Usage.TotalTokens != 15 {
+		t.Errorf("expected 15 total tokens, got %d", result.Usage.TotalTokens)
+	}
+	if result.SessionID != session.ID {
+		t.Errorf("expected session ID %s, got %s", session.ID, result.SessionID)
+	}
+}
+
+func TestRunSyncError(t *testing.T) {
+	events := []types.Event{
+		{Type: types.EventError, Error: fmt.Errorf("agent crashed")},
+	}
+
+	agent := newMockAgent(events)
+	store := newMockStore()
+	session := types.NewSession()
+
+	orch := NewOrchestrator(agent, store)
+	result, err := orch.RunSync(context.Background(), types.RunInput{
+		Session:    session,
+		NewMessage: func() *types.Message { m := types.NewUserMessage("go"); return &m }(),
+	})
+	if err == nil {
+		t.Fatal("expected error from RunSync")
+	}
+	if result != nil {
+		t.Error("expected nil result on error")
+	}
+	if err.Error() != "agent crashed" {
+		t.Errorf("expected 'agent crashed', got %q", err.Error())
+	}
+}
+
+func TestRunSyncNilSession(t *testing.T) {
+	agent := newMockAgent(nil)
+	store := newMockStore()
+
+	orch := NewOrchestrator(agent, store)
+	_, err := orch.RunSync(context.Background(), types.RunInput{Session: nil})
+	if err == nil {
+		t.Fatal("expected error for nil session")
+	}
+}

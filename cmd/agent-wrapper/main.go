@@ -8,11 +8,11 @@ import (
 	"os/signal"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
-	"github.com/smallnest/agent-wrapper/claude"
-	"github.com/smallnest/agent-wrapper/acp"
-	"github.com/smallnest/agent-wrapper/codex"
-	"github.com/smallnest/agent-wrapper/opencode"
-	"github.com/smallnest/agent-wrapper/pi"
+	"github.com/smallnest/agent-wrapper/agents/acp"
+	"github.com/smallnest/agent-wrapper/agents/claude"
+	"github.com/smallnest/agent-wrapper/agents/codex"
+	"github.com/smallnest/agent-wrapper/agents/opencode"
+	"github.com/smallnest/agent-wrapper/agents/pi"
 	"github.com/smallnest/agent-wrapper/types"
 	"github.com/spf13/pflag"
 )
@@ -98,7 +98,7 @@ func cmdRun(args []string) {
 		fmt.Fprintf(os.Stderr, "warning: register pi-agent: %v\n", err)
 	}
 	if err := opencode.RegisterIn(registry); err != nil {
-	_ = acp.RegisterIn(registry) // best-effort
+		_ = acp.RegisterIn(registry) // best-effort
 		fmt.Fprintf(os.Stderr, "warning: register opencode: %v\n", err)
 	}
 	if err := acp.RegisterIn(registry); err != nil {
@@ -237,7 +237,7 @@ func cmdList() {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 	if err := opencode.RegisterIn(registry); err != nil {
-	_ = acp.RegisterIn(registry) // best-effort
+		_ = acp.RegisterIn(registry) // best-effort
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 

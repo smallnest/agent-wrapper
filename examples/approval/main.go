@@ -6,7 +6,7 @@ import (
 	"os"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
-	"github.com/smallnest/agent-wrapper/claude"
+	"github.com/smallnest/agent-wrapper/agents/claude"
 	"github.com/smallnest/agent-wrapper/types"
 )
 

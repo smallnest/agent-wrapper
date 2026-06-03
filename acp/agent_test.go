@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	acp_sdk "github.com/coder/acp-go-sdk"
 	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/types"
 )
@@ -57,7 +56,6 @@ func TestRegisterIn(t *testing.T) {
 		t.Errorf("expected 'ACP', got %q", agent.Name())
 	}
 
-	// Verify acpx appears in registry list.
 	found := false
 	for _, name := range r.List() {
 		if name == "acp" {
@@ -69,7 +67,6 @@ func TestRegisterIn(t *testing.T) {
 		t.Error("expected 'acp' in registry list")
 	}
 
-	// BinaryPath passed through options.
 	agent2, err := r.Get("acp", map[string]any{"binaryPath": "/custom/acpx"})
 	if err != nil {
 		t.Fatalf("Get with options: %v", err)
@@ -79,84 +76,78 @@ func TestRegisterIn(t *testing.T) {
 	}
 }
 
-
-func TestSessionUpdateRouting(t *testing.T) {
-	// Verify collector routes to correct Event types.
-	col := &collector{}
-
-	// Agent message.
-	col.events = nil
-	_ = col.SessionUpdate(context.Background(), newTextUpdate("session_1", "hello"))
-	if len(col.events) != 1 || col.events[0].Type != types.EventTextDelta {
-		t.Fatalf("expected 1 text_delta, got %v", col.events)
+func TestParseAcpxTextDelta(t *testing.T) {
+	evt, ok := parseAcpxEvent([]byte(`{"type":"text_delta","delta":"hello"}`))
+	if !ok {
+		t.Fatal("expected ok")
 	}
-
-	// Tool call.
-	col.events = nil
-	_ = col.SessionUpdate(context.Background(), newToolCallUpdate("session_1", "call_1", "edit", map[string]any{"path": "f.go"}))
-	if len(col.events) != 1 || col.events[0].Type != types.EventToolCall {
-		t.Fatalf("expected 1 tool_call, got %v", col.events)
-	}
-
-	// Tool call update (result).
-	col.events = nil
-	_ = col.SessionUpdate(context.Background(), newToolUpdate("session_1", "call_1", map[string]any{"output": "ok"}))
-	if len(col.events) != 1 || col.events[0].Type != types.EventToolResult {
-		t.Fatalf("expected 1 tool_result, got %v", col.events)
+	if evt.Type != types.EventTextDelta || evt.TextDelta != "hello" {
+		t.Errorf("got type=%s text=%q", evt.Type, evt.TextDelta)
 	}
 }
 
-func newTextUpdate(sid, text string) acp_sdk.SessionNotification {
-	return acp_sdk.SessionNotification{
-		SessionId: acp_sdk.SessionId(sid),
-		Update:    acp_sdk.UpdateAgentMessageText(text),
+func TestParseAcpxToolCall(t *testing.T) {
+	evt, ok := parseAcpxEvent([]byte(`{"type":"tool_call","tool_call_id":"c1","tool_name":"read","tool_input":{}}`))
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if evt.Type != types.EventToolCall || evt.ToolCallID != "c1" {
+		t.Errorf("got type=%s id=%q", evt.Type, evt.ToolCallID)
 	}
 }
 
-func newToolCallUpdate(sid, callID, kind string, input any) acp_sdk.SessionNotification {
-	return acp_sdk.SessionNotification{
-		SessionId: acp_sdk.SessionId(sid),
-		Update: acp_sdk.StartToolCall(acp_sdk.ToolCallId(callID), "a tool",
-			acp_sdk.WithStartKind(acp_sdk.ToolKind(kind)),
-			acp_sdk.WithStartRawInput(input),
-		),
+func TestParseAcpxToolResult(t *testing.T) {
+	evt, ok := parseAcpxEvent([]byte(`{"type":"tool_result","tool_result_id":"c1","tool_result_output":"ok"}`))
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if evt.Type != types.EventToolResult || evt.ToolResultID != "c1" {
+		t.Errorf("got type=%s id=%q", evt.Type, evt.ToolResultID)
 	}
 }
 
-func newToolUpdate(sid, callID string, output any) acp_sdk.SessionNotification {
-	return acp_sdk.SessionNotification{
-		SessionId: acp_sdk.SessionId(sid),
-		Update: acp_sdk.UpdateToolCall(acp_sdk.ToolCallId(callID),
-			acp_sdk.WithUpdateRawOutput(output),
-			acp_sdk.WithUpdateStatus(acp_sdk.ToolCallStatusCompleted),
-		),
+func TestParseAcpxTurnEnd(t *testing.T) {
+	evt, ok := parseAcpxEvent([]byte(`{"type":"turn_end","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}`))
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if evt.Type != types.EventTurnEnd {
+		t.Errorf("got type=%s", evt.Type)
+	}
+	if evt.TokenUsage == nil || evt.TokenUsage.TotalTokens != 15 {
+		t.Errorf("expected usage 15, got %v", evt.TokenUsage)
 	}
 }
 
-func TestCollectorPermissions(t *testing.T) {
-	col := &collector{}
-	resp, err := col.RequestPermission(context.Background(), acp_sdk.RequestPermissionRequest{
-		Options: []acp_sdk.PermissionOption{
-			{OptionId: acp_sdk.PermissionOptionId("opt1"), Name: "Allow", Kind: "allow"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("RequestPermission: %v", err)
+func TestParseAcpxSessionID(t *testing.T) {
+	evt, ok := parseAcpxEvent([]byte(`{"type":"init","session_id":"sess-123"}`))
+	if !ok {
+		t.Fatal("expected ok")
 	}
-	if resp.Outcome.Selected == nil {
-		t.Fatal("expected auto-selected first option")
-	}
-
-	// Empty options = cancelled.
-	resp2, err := col.RequestPermission(context.Background(), acp_sdk.RequestPermissionRequest{})
-	if err != nil {
-		t.Fatalf("RequestPermission: %v", err)
-	}
-	if resp2.Outcome.Cancelled == nil {
-		t.Fatal("expected cancelled when no options")
+	if evt.SessionID != "sess-123" {
+		t.Errorf("expected sess-123, got %q", evt.SessionID)
 	}
 }
 
-// Ensure acp_sdk types are used (compile-time check).
-var _ = acp_sdk.TextBlock
+func TestParseAcpxError(t *testing.T) {
+	evt, ok := parseAcpxEvent([]byte(`{"type":"error","error":"context length exceeded"}`))
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if evt.Type != types.EventError {
+		t.Errorf("got type=%s", evt.Type)
+	}
+	if !agentwrapper.IsContextLengthExceeded(evt.Error) {
+		t.Error("expected context-length typed error")
+	}
+}
+
+func TestParseAcpxUnknownType(t *testing.T) {
+	_, ok := parseAcpxEvent([]byte(`{"type":"garbage"}`))
+	if ok {
+		t.Error("expected false for unknown type")
+	}
+}
+
+// Ensure json is imported.
 var _ = json.Marshal

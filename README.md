@@ -190,6 +190,10 @@ agent-wrapper 与 ACP 是互补关系，非竞争关系：
 
 **关键区别：ACP 是一份协议，agent-wrapper 是一份实现。** ACP 说"你应该用这个 JSON 格式对话"，agent-wrapper 说"给我任意 agent CLI，我来跑、来容错、来治理"。两者可以组合使用——agent-wrapper 作为 ACP agent 的宿主运行时。
 
+### 相关项目
+
+[acpx](https://acpx.sh/) 是 openclaw（Peter Steinberger）开发的 ACP 命令行客户端——通过 `npm install -g acpx` 安装后，可以在命令行直接与支持 ACP 协议的 agent 交互。acpx 是 ACP 的**消费者**，agent-wrapper 是 agent CLI 的**包装器**。两者解决不同层次的问题：acpx 让你"用 ACP 协议调 agent"，agent-wrapper 让你"把任意 agent CLI 封成可治理的运行时"。
+
 ## License
 
 MIT

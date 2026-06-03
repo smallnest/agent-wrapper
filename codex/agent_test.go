@@ -38,10 +38,9 @@ func TestTextDelta(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("hi"))
+	
 
-	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -90,10 +89,9 @@ func TestToolCall(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("check"))
+	
 
-	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -124,10 +122,9 @@ func TestToolResult(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("read"))
+	
 
-	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -157,10 +154,9 @@ func TestTurnFailed(t *testing.T) {
 	})
 
 	agent := New(Options{BinaryPath: bin})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+	
 
-	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -175,10 +171,9 @@ func TestTurnFailed(t *testing.T) {
 
 func TestBinaryNotFound(t *testing.T) {
 	agent := New(Options{BinaryPath: "/nonexistent/path/codex"})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+	
 
-	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	_, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err == nil {
 		t.Fatal("expected error for missing binary")
 	}
@@ -214,9 +209,8 @@ func TestBinaryAutoDetectNotFound(t *testing.T) {
 
 func TestNoUserMessage(t *testing.T) {
 	agent := New(Options{BinaryPath: "/nonexistent/codex"})
-	session := types.NewSession()
 
-	_, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	_, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err == nil {
 		t.Fatal("expected error when no user message found")
 	}
@@ -231,13 +225,12 @@ func TestContextCancellation(t *testing.T) {
 	_ = os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+	
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 	defer cancel()
 
-	events, err := agent.Run(ctx, types.RunInput{Session: session})
+	events, err := agent.Run(ctx, types.RunInput{Prompt: "hi"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -264,10 +257,9 @@ func TestContextLengthError(t *testing.T) {
 	_ = os.WriteFile(script, []byte(content), 0o755)
 
 	agent := New(Options{BinaryPath: script})
-	session := types.NewSession()
-	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+	
 
-	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	events, err := agent.Run(context.Background(), types.RunInput{Prompt: "hi"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

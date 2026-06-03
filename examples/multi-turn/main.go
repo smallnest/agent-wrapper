@@ -1,8 +1,3 @@
-// multi-turn 演示多 turn 对话中的上下文累积。
-//
-// 使用方法:
-//
-//	go run main.go
 package main
 
 import (
@@ -12,7 +7,6 @@ import (
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/claude"
-	"github.com/smallnest/agent-wrapper/sessionstore/memory"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -26,50 +20,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := memory.New()
-	session, err := store.Create()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "create session: %v\n", err)
-		os.Exit(1)
-	}
+	orch := agentwrapper.NewOrchestrator(agent)
 
-	// 第一次对话
-	orch := agentwrapper.NewOrchestrator(agent, store)
-	fmt.Println("=== 第一轮对话 ===")
-	runTurn(orch, session, "我叫小明")
-
-	// 第二次对话 — 使用同一个 session，agent 能记住之前的上下文
-	fmt.Println("\n=== 第二轮对话 ===")
-	runTurn(orch, session, "我叫什么名字？")
-
-	// 打印 session 中的所有消息
-	fmt.Println("\n=== Session 消息历史 ===")
-	for i, msg := range session.Messages {
-		fmt.Printf("[%d] %s: %s\n", i, msg.Role, truncate(msg.Content, 80))
-	}
-}
-
-func runTurn(orch *agentwrapper.Orchestrator, session *types.Session, prompt string) {
-	events, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage(prompt); return &m }(),
+	// First turn.
+	result1, err := orch.RunSync(context.Background(), types.RunInput{
+		Prompt:   "list the files in the current directory",
+		MaxTurns: 2,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "run: %v\n", err)
-		return
+		fmt.Fprintf(os.Stderr, "run 1: %v\n", err)
+		os.Exit(1)
 	}
+	fmt.Printf("Turn 1: %s\n", result1.Text)
+	fmt.Printf("Session: %s\n", result1.SessionID)
 
-	for evt := range events {
-		if evt.Type == types.EventTextDelta {
-			fmt.Print(evt.TextDelta)
-		}
+	// Second turn resumes the same agent session.
+	result2, err := orch.RunSync(context.Background(), types.RunInput{
+		Prompt:    "explain the most important file",
+		SessionID: result1.SessionID,
+		MaxTurns:  2,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "run 2: %v\n", err)
+		os.Exit(1)
 	}
-	fmt.Println()
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "..."
+	fmt.Printf("Turn 2: %s\n", result2.Text)
 }

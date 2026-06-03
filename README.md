@@ -137,6 +137,7 @@ go build ./cmd/agent-wrapper
 | 示例 | 说明 |
 |------|------|
 | [basic](examples/basic/) | 最简调用 |
+| [async](examples/async/) | 流式异步消费 orch.Run |
 | [multi-turn](examples/multi-turn/) | 多 turn 上下文累积 |
 | [session](examples/session/) | Session resume 跨调用恢复会话 |
 | [approval](examples/approval/) | 交互式审批 |

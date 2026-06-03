@@ -167,7 +167,6 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 			}
 			if evt.SessionID != "" {
 				sid = evt.SessionID
-				continue
 			}
 			evt.SessionID = sid
 			select {

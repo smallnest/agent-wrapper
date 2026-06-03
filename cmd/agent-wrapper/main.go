@@ -186,7 +186,11 @@ func cmdRun(args []string) {
 			os.Exit(1)
 		}
 
+		var sid string
 		for evt := range events {
+			if evt.SessionID != "" {
+				sid = evt.SessionID
+			}
 			switch evt.Type {
 			case types.EventTextDelta:
 				fmt.Print(evt.TextDelta)
@@ -206,6 +210,9 @@ func cmdRun(args []string) {
 			case types.EventError:
 				fmt.Fprintf(os.Stderr, "[error] %v\n", evt.Error)
 			}
+		}
+		if sid != "" {
+			fmt.Fprintf(os.Stderr, "session: %s\n", sid)
 		}
 	}
 }

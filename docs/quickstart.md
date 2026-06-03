@@ -19,7 +19,6 @@ import (
 
     agentwrapper "github.com/smallnest/agent-wrapper"
     "github.com/smallnest/agent-wrapper/claude"
-    "github.com/smallnest/agent-wrapper/sessionstore/memory"
     "github.com/smallnest/agent-wrapper/types"
 )
 
@@ -31,27 +30,25 @@ func main() {
     // 2. 创建 agent
     agent, _ := registry.Get("claude-code", nil)
 
-    // 3. 创建 session
-    store := memory.New()
-    session, _ := store.Create()
+    // 3. 创建 orchestrator 并运行
+    orch := agentwrapper.NewOrchestrator(agent)
 
-    // 4. 运行
-    orch := agentwrapper.NewOrchestrator(agent, store)
+    // 流式 API
     events, _ := orch.Run(context.Background(), types.RunInput{
-        Session:    session,
-        NewMessage: func() *types.Message { m := types.NewUserMessage("你好"); return &m }(),
+        Prompt: "你好",
     })
-
-    // 5. 读取事件流（也可用 RunSync 直接获取聚合结果）
     for evt := range events {
         if evt.Type == types.EventTextDelta {
             fmt.Print(evt.TextDelta)
         }
     }
 
-    // 或使用同步 API：
-    // result, _ := orch.RunSync(ctx, types.RunInput{...})
-    // fmt.Println(result.Text)
+    // 同步 API — 返回 RunResult{Text, Usage, SessionID}
+    result, _ := orch.RunSync(context.Background(), types.RunInput{
+        Prompt: "say hello",
+    })
+    fmt.Println(result.Text)
+    fmt.Println(result.SessionID) // 可用于后续 --resume
 }
 ```
 
@@ -59,25 +56,25 @@ func main() {
 
 ```bash
 # 构建
-go build ./cmd/agent-wrapper
+go build -o bin/agent-wrapper ./cmd/agent-wrapper
 
 # 默认流式输出（文本→stdout，元数据→stderr）
-./agent-wrapper run --provider claude-code "解释这段代码"
+./bin/agent-wrapper run --provider claude-code "解释这段代码"
 
 # JSON 聚合输出（适合脚本/CI）
-./agent-wrapper run --provider claude-code "hello" --json
+./bin/agent-wrapper run --provider claude-code "hello" --json
 
 # NDJSON 流式输出（适合管道处理）
-./agent-wrapper run --provider claude-code "hello" --json --stream | jq .
+./bin/agent-wrapper run --provider claude-code "hello" --json --stream | jq .
 
 # 查看可用 provider
-./agent-wrapper list
+./bin/agent-wrapper list
 
 # 自动审批 + 预算限制
-./agent-wrapper run --provider codex "修复 bug" --approve-all --budget-tokens 5000
+./bin/agent-wrapper run --provider codex "修复 bug" --approve-all --budget-tokens 5000
 
 # 查看版本
-./agent-wrapper version
+./bin/agent-wrapper version
 ```
 
 ### 输出格式

@@ -17,7 +17,6 @@ import (
 
     agentwrapper "github.com/smallnest/agent-wrapper"
     "github.com/smallnest/agent-wrapper/claude"
-    "github.com/smallnest/agent-wrapper/sessionstore/memory"
     "github.com/smallnest/agent-wrapper/types"
 )
 
@@ -26,20 +25,25 @@ func main() {
     claude.RegisterIn(registry)
 
     agent, _ := registry.Get("claude-code", nil)
-    store := memory.New()
-    session, _ := store.Create()
+    orch := agentwrapper.NewOrchestrator(agent)
 
-    orch := agentwrapper.NewOrchestrator(agent, store)
+    // Stream events.
     events, _ := orch.Run(context.Background(), types.RunInput{
-        Session:    session,
-        NewMessage: func() *types.Message { m := types.NewUserMessage("你好"); return &m }(),
+        Prompt: "你好",
     })
-
     for evt := range events {
         if evt.Type == types.EventTextDelta {
             fmt.Print(evt.TextDelta)
         }
     }
+
+    // Or use sync API.
+    result, _ := orch.RunSync(context.Background(), types.RunInput{
+        Prompt:    "say hello",
+        SessionID: "resume-this-session-uuid", // optional
+    })
+    fmt.Println(result.Text)
+    fmt.Println(result.SessionID) // agent runtime session
 }
 ```
 
@@ -79,10 +83,10 @@ func main() {
 ## 核心概念
 
 - **Agent** — 统一接口，通过子进程驱动各 agent CLI
-- **Orchestrator** — 多 turn 对话编排，含审批、预算控制、session 回写
+- **Orchestrator** — 多 turn 对话编排，含审批、预算控制、上下文压缩重试
 - **Registry** — Provider 注册表，按名称创建 Agent 实例
-- **SessionStore** — Session 持久化（内置内存实现）
 - **Event** — 统一事件流（TextDelta / ToolCall / ToolResult / TurnEnd / Error）
+- **RunSync** — 同步 API，收集所有事件返回聚合 `RunResult`
 
 ## Provider 支持
 

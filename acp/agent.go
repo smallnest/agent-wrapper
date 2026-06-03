@@ -1,13 +1,16 @@
 package acp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
+	"github.com/smallnest/agent-wrapper/process"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -85,6 +88,155 @@ type acpxUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
 	TotalTokens  int `json:"total_tokens"`
+}
+
+// Run starts an acpx subprocess and returns an event channel.
+func (a *AcpAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.Event, error) {
+	bin, err := a.resolveBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Prompt == "" {
+		return nil, fmt.Errorf("acp: no prompt provided")
+	}
+
+	args := []string{"--format", "json"}
+	if input.SessionID != "" {
+		args = append(args, "--session", input.SessionID)
+	}
+	args = append(args, input.Prompt)
+	if input.WorkingDir != "" {
+		args = append(args, "--cwd", input.WorkingDir)
+	}
+
+	proc, err := process.StartProcess(ctx, process.ProcessConfig{
+		Command: bin,
+		Args:    args,
+		WorkDir: input.WorkingDir,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("start acp process: %w", err)
+	}
+
+	events := make(chan types.Event, 64)
+
+	go func() {
+		defer close(events)
+		defer func() { _ = proc.Close() }()
+
+		scanner := process.NewJSONRPCScanner(proc.Stdout())
+		var sid string
+
+		for scanner.Scan() {
+			frame := scanner.Frame()
+			evt, ok := parseAcpxEvent(frame.Data)
+			if !ok {
+				continue
+			}
+			if evt.SessionID != "" {
+				sid = evt.SessionID
+			}
+			evt.SessionID = sid
+			select {
+			case events <- evt:
+			case <-ctx.Done():
+				events <- types.Event{Type: types.EventError, Error: ctx.Err()}
+				return
+			}
+			if evt.Type == types.EventTurnEnd {
+				break
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			wrapped := agentwrapper.WrapIfContextExceeded(err, proc.Stderr())
+			select {
+			case events <- types.Event{Type: types.EventError, Error: wrapped}:
+			default:
+			}
+		}
+		if ec := proc.Wait(); ec != 0 {
+			if stderr := proc.Stderr(); stderr != "" {
+				wrapped := agentwrapper.WrapIfContextExceeded(fmt.Errorf("exit %d: %s", ec, stderr), stderr)
+				if _, ok := wrapped.(*agentwrapper.ContextLengthExceededError); ok {
+					select {
+					case events <- types.Event{Type: types.EventError, Error: wrapped}:
+					default:
+					}
+				}
+			}
+		}
+	}()
+
+	return events, nil
+}
+
+func parseAcpxEvent(data []byte) (types.Event, bool) {
+	var raw acpxEvent
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return types.Event{}, false
+	}
+
+	switch raw.Type {
+	case "text_delta", "content_delta":
+		text := raw.Delta
+		if text == "" {
+			text = raw.Text
+		}
+		if text == "" {
+			text = raw.Content
+		}
+		return types.Event{Type: types.EventTextDelta, TextDelta: text}, true
+
+	case "tool_call":
+		return types.Event{
+			Type:       types.EventToolCall,
+			ToolCallID: raw.ToolCallID,
+			ToolName:   raw.ToolName,
+			ToolInput:  raw.ToolInput,
+		}, true
+
+	case "tool_result":
+		return types.Event{
+			Type:             types.EventToolResult,
+			ToolResultID:     raw.ToolResultID,
+			ToolResultOutput: raw.ToolResultOutput,
+			ToolResultError:  raw.ToolResultError,
+		}, true
+
+	case "turn_end", "complete":
+		evt := types.Event{
+			Type:       types.EventTurnEnd,
+			StopReason: raw.StopReason,
+		}
+		if evt.StopReason == "" {
+			evt.StopReason = "end_turn"
+		}
+		if raw.Usage != nil {
+			evt.TokenUsage = &types.TokenUsage{
+				InputTokens:  raw.Usage.InputTokens,
+				OutputTokens: raw.Usage.OutputTokens,
+				TotalTokens:  raw.Usage.TotalTokens,
+			}
+		}
+		return evt, true
+
+	case "error":
+		msg := raw.Error
+		if msg == "" {
+			msg = "unknown acpx error"
+		}
+		err := fmt.Errorf("acpx: %s", msg)
+		if agentwrapper.IsContextLengthExceeded(err) {
+			err = &agentwrapper.ContextLengthExceededError{Err: err}
+		}
+		return types.Event{Type: types.EventError, Error: err}, true
+
+	case "init", "system":
+		return types.Event{SessionID: raw.SessionID}, true
+	}
+
+	return types.Event{}, false
 }
 
 // RegisterIn registers the acp provider.

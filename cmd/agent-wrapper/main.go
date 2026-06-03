@@ -59,6 +59,7 @@ Run flags:
   --system-prompt-file PATH  Read system prompt from file
   --approve-all              Auto-approve all tool calls
   --budget-tokens N          Token budget limit
+  --session-id UUID          Resume a session by ID
   --binary-path PATH         Override agent CLI binary path
   --json                     Output in JSON format (with --stream: NDJSON; without: single object)
   --stream                   Stream output (default true; set --stream=false to disable)
@@ -68,6 +69,7 @@ Examples:
   agent-wrapper run --provider codex --model gpt-4 "fix the bug" --approve-all
   agent-wrapper run --provider claude-code --json "hello"        # single JSON object
   agent-wrapper run --provider claude-code --json --stream "hi"  # NDJSON stream
+  agent-wrapper run --provider claude-code --session-id abc123 "continue"  # resume session
   agent-wrapper list
   agent-wrapper version`)
 }
@@ -155,6 +157,7 @@ func cmdRun(args []string) {
 		SystemPrompt: systemPrompt,
 		WorkingDir:   flags.workingDir,
 		MaxTurns:     maxTurns,
+		SessionID:    flags.sessionID,
 		OutputFormat: outputFormat,
 	}
 
@@ -251,6 +254,7 @@ type runFlags struct {
 	systemPromptFile string
 	approveAll       bool
 	budgetTokens     int
+	sessionID        string
 	binaryPath       string
 	json             bool
 	stream           bool
@@ -269,6 +273,7 @@ func parseRunFlags(args []string) *runFlags {
 	fs.BoolVar(&f.approveAll, "approve-all", false, "Auto-approve all tool calls")
 	fs.IntVar(&f.budgetTokens, "budget-tokens", 0, "Token budget limit")
 	fs.StringVar(&f.binaryPath, "binary-path", "", "Override agent CLI binary path")
+	fs.StringVar(&f.sessionID, "session-id", "", "Resume a session by ID")
 	fs.BoolVar(&f.json, "json", false, "Output in JSON format")
 	fs.BoolVar(&f.stream, "stream", true, "Stream output (set --stream=false to disable)")
 	_ = fs.Parse(args)

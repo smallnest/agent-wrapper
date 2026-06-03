@@ -1,3 +1,11 @@
+// multi-turn 演示 orchestrator 多 turn 对话编排。
+//
+// Orchestrator 自动处理 agent 的 tool_use/tool_result 循环，
+// 不必手动管理 session。
+//
+// 使用方法:
+//
+//	go run main.go
 package main
 
 import (
@@ -22,27 +30,35 @@ func main() {
 
 	orch := agentwrapper.NewOrchestrator(agent)
 
-	// First turn.
-	result1, err := orch.RunSync(context.Background(), types.RunInput{
-		Prompt:   "list the files in the current directory",
-		MaxTurns: 2,
+	// Single prompt triggers multiple turns if agent needs tools.
+	// Orchestrator handles the tool_use / tool_result loop internally.
+	events, err := orch.Run(context.Background(), types.RunInput{
+		Prompt:   "list files in current directory and explain the most important one",
+		MaxTurns: 3,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "run 1: %v\n", err)
+		fmt.Fprintf(os.Stderr, "run: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Turn 1: %s\n", result1.Text)
-	fmt.Printf("Session: %s\n", result1.SessionID)
 
-	// Second turn resumes the same agent session.
-	result2, err := orch.RunSync(context.Background(), types.RunInput{
-		Prompt:    "explain the most important file",
-		SessionID: result1.SessionID,
-		MaxTurns:  2,
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "run 2: %v\n", err)
-		os.Exit(1)
+	for evt := range events {
+		switch evt.Type {
+		case types.EventTextDelta:
+			fmt.Print(evt.TextDelta)
+		case types.EventToolCall:
+			fmt.Printf("\n[tool] %s\n", evt.ToolName)
+		case types.EventToolResult:
+			fmt.Printf("[result] %s\n", truncStr(evt.ToolResultOutput, 100))
+		case types.EventTurnEnd:
+			fmt.Println("\n--- turn end ---")
+		}
 	}
-	fmt.Printf("Turn 2: %s\n", result2.Text)
+	fmt.Println()
+}
+
+func truncStr(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }

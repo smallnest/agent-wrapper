@@ -108,6 +108,9 @@ go build ./cmd/agent-wrapper
 # JSON 聚合输出（适合脚本/CI）
 ./agent-wrapper run --provider codex "修复 bug" --json
 
+# 恢复已有 session
+./agent-wrapper run --provider claude-code --session-id abc123 "继续刚才的对话"
+
 # NDJSON 流式输出（适合管道处理）
 ./agent-wrapper run --provider claude-code "hello" --json --stream | jq .
 
@@ -135,6 +138,7 @@ go build ./cmd/agent-wrapper
 |------|------|
 | [basic](examples/basic/) | 最简调用 |
 | [multi-turn](examples/multi-turn/) | 多 turn 上下文累积 |
+| [session](examples/session/) | Session resume 跨调用恢复会话 |
 | [approval](examples/approval/) | 交互式审批 |
 | [budget](examples/budget/) | 预算限制 |
 | [custom-provider](examples/custom-provider/) | 自定义 provider |

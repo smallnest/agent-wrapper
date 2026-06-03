@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	acp_sdk "github.com/coder/acp-go-sdk"
 	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/types"
 )
@@ -78,9 +79,6 @@ func TestRegisterIn(t *testing.T) {
 	}
 }
 
-// mockACPServer produces a minimal ACP JSON-RPC response enough to test the
-// collector logic without a real process.
-type mockACPServer struct{}
 
 func TestSessionUpdateRouting(t *testing.T) {
 	// Verify collector routes to correct Event types.
@@ -88,21 +86,21 @@ func TestSessionUpdateRouting(t *testing.T) {
 
 	// Agent message.
 	col.events = nil
-	col.SessionUpdate(context.Background(), newTextUpdate("session_1", "hello"))
+	_ = col.SessionUpdate(context.Background(), newTextUpdate("session_1", "hello"))
 	if len(col.events) != 1 || col.events[0].Type != types.EventTextDelta {
 		t.Fatalf("expected 1 text_delta, got %v", col.events)
 	}
 
 	// Tool call.
 	col.events = nil
-	col.SessionUpdate(context.Background(), newToolCallUpdate("session_1", "call_1", "edit", map[string]any{"path": "f.go"}))
+	_ = col.SessionUpdate(context.Background(), newToolCallUpdate("session_1", "call_1", "edit", map[string]any{"path": "f.go"}))
 	if len(col.events) != 1 || col.events[0].Type != types.EventToolCall {
 		t.Fatalf("expected 1 tool_call, got %v", col.events)
 	}
 
 	// Tool call update (result).
 	col.events = nil
-	col.SessionUpdate(context.Background(), newToolUpdate("session_1", "call_1", map[string]any{"output": "ok"}))
+	_ = col.SessionUpdate(context.Background(), newToolUpdate("session_1", "call_1", map[string]any{"output": "ok"}))
 	if len(col.events) != 1 || col.events[0].Type != types.EventToolResult {
 		t.Fatalf("expected 1 tool_result, got %v", col.events)
 	}

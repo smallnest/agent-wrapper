@@ -2,14 +2,14 @@
 
 ## 概览
 
-| 特性 | Claude Code | Codex | Pi Agent | OpenCode |
-|------|------------|-------|----------|----------|
-| 协议 | JSON-RPC 2.0 | SSE (OpenAI) | JSONL (RPC mode) | 非交互模式 |
-| 流式输出 | ✅ TextDelta | ✅ Content delta | ✅ text_delta | ❌ 一次性输出 |
-| 工具调用 | ✅ | ✅ | ✅ | ❌ |
-| 工具结果 | ✅ | ✅ | ✅ | ❌ |
-| Token 用量 | ✅ | ✅ | ❌ | ❌ |
-| Session 注入 | ✅ 完整历史 | ✅ OpenAI 格式 | ❌ 单条 prompt | ❌ 单条 prompt |
+| 特性 | Claude Code | Codex | Pi Agent | OpenCode | ACP |
+|------|------------|-------|----------|----------|-----|
+| 协议 | CLI stream-json | CLI exec --json | CLI --mode json | CLI run --format json | ACP JSON-RPC |
+| 流式输出 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 工具调用 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 工具结果 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Token 用量 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Session 管理 | ✅ --resume | ✅ --resume | ✅ --session-id | ✅ --session | ✅ ACP resume |
 | System Prompt | ✅ | ✅ | ✅ | ✅ (env var) |
 | Binary 自动检测 | ✅ | ✅ | ✅ | ✅ |
 | 上下文取消 | ✅ | ✅ | ✅ | ✅ |
@@ -72,12 +72,10 @@
 **协议**: 非交互模式，单次 JSON 输出 `{"response":"text"}`。
 
 **限制**:
-- ❌ 无流式输出，一次性返回完整响应
-- ❌ 无工具调用/结果事件
-- ❌ 无消息历史注入，仅接受最后一条用户消息
-- ❌ 无 Token 用量信息
-- ✅ 支持 System Prompt（通过 `OPENCODE_SYSTEM_PROMPT` 环境变量）
-- ✅ 支持 Model（通过 `OPENCODE_MODEL` 环境变量）
+- ✅ 流式输出（`run --format json`）
+- ✅ 工具调用和结果事件
+- ❌ 不支持 system prompt
+- ✅ 支持 `-m` model flag
 
 **注意**: OpenCode 项目已归档并更名为 [Crush](https://github.com/charmbracelet/crush)。
 
@@ -96,6 +94,22 @@ opencode.RegisterIn(registry) // 替换 opencode stub
 
 agent, _ := registry.Get("claude-code", nil)
 ```
+
+### ACP (`acp`)
+
+**启动命令**: `acpx` (默认)
+
+**协议**: ACP JSON-RPC over stdio，通过 `github.com/coder/acp-go-sdk` 通信。
+
+**特点**:
+- 完整的 ACP 生命周期：Initialize → NewSession/ResumeSession → Prompt
+- SessionUpdate 通知路由到 `types.Event`（text_delta、tool_call、tool_result）
+- 支持 session resume（透传 `--session` flag）
+- 自动审批权限请求（默认允许第一个选项）
+
+**安装**: `npm install -g acpx` 或使用任何 ACP 兼容二进制
+
+**二进制搜索路径**: PATH，可通过 `BinaryPath` 覆盖
 
 ## 自定义 Binary Path
 

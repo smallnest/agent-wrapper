@@ -92,10 +92,11 @@ func main() {
 
 | Provider | 协议 | 流式 | 工具调用 | Token 用量 |
 |----------|------|------|---------|-----------|
-| Claude Code | JSON-RPC 2.0 | ✅ | ✅ | ✅ |
-| Codex | SSE (OpenAI) | ✅ | ✅ | ✅ |
-| Pi Agent | JSONL (RPC) | ✅ | ✅ | ❌ |
-| OpenCode | 非交互模式 | ❌ | ❌ | ❌ |
+| Claude Code | CLI 子进程 (stream-json) | ✅ | ✅ | ✅ |
+| Codex | CLI 子进程 (exec --json) | ✅ | ✅ | ✅ |
+| Pi Agent | CLI 子进程 (--mode json) | ✅ | ✅ | ❌ |
+| OpenCode | CLI 子进程 (run --format json) | ✅ | ✅ | ✅ |
+| ACP | ACP JSON-RPC over stdio | ✅ | ✅ | ✅ |
 
 ## CLI
 
@@ -175,22 +176,7 @@ go build ./cmd/agent-wrapper
 
 [ACP](https://agentclientprotocol.com/get-started/introduction) 是编辑器与 agent 之间的通信协议标准，定位类似 LSP——定义 JSON-RPC 消息格式让任何编辑器对接任何 agent。
 
-agent-wrapper 与 ACP 是互补关系，非竞争关系：
-
-| 维度 | ACP | agent-wrapper |
-|------|-----|---------------|
-| **定位** | 协议标准——定义 agent 和 editor 之间怎么通信 | 运行时库——封装 agent CLI 进程并提供持久化、审批、重试 |
-| **解决的问题** | "我写的 agent 怎么对接多个编辑器" | "我已经有多个 agent CLI，怎么统一调用、编排、容错" |
-| **抽象层** | 传输层（JSON-RPC over stdio/HTTP） | 进程控制层（子进程生命周期 + event 流 + turn 循环） |
-| **Agent 实现方** | agent 方必须实现 ACP 协议 | agent 只需有 CLI，wrap 即可——无需修改 agent 自身 |
-| **Session 管理** | 不定义 session 持久化 | 透传 agent runtime session + `RunResult.SessionID` 可存储恢复 |
-| **错误恢复** | 无内置重试/压缩 | 内置上下文超限检测 → 滑动窗口 → 摘要压缩 → 重试，最多 N 次 |
-| **审批/预算** | 不涉及 | Orchestrator 内置审批 handler + token 预算控制 |
-| **多 provider** | 需每个 agent 实现协议 | Registry 注册即可，4 个内置 provider + 自定义 |
-
-### 为什么不用 ACP
-
-agent-wrapper 不采用 ACP 协议，而是直接驱动 agent CLI 子进程。ACP 在编辑器场景下有意义，但在工程集成场景下存在几个根本性问题：
+agent-wrapper 不采用 ACP 协议，而是直接驱动 agent CLI 子进程。ACP 在编辑器场景下有意义，在工程集成场景下存在几个根本性问题：
 
 1. **功能不对齐**。Agent CLI 提供完整功能（`--output-format`、`--max-turns`、`--approve-all`、`--session-id` 等），ACP server 是重新实现的一层，通常只覆盖子集，很多 CLI flag 和输出格式在 ACP 层被丢弃或降级。
 

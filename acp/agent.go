@@ -150,7 +150,7 @@ func (a *AcpAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		stdin.Close()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("acp: stdout pipe: %w", err)
 	}
 	stderr := &strings.Builder{}

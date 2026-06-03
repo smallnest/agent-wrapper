@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -65,10 +66,14 @@ Run flags:
   --budget-tokens N          Token budget limit
   --session-id UUID          Resume an existing session
   --binary-path PATH         Override agent CLI binary path
+  --json                     Output in JSON format (with --stream: NDJSON; without: single object)
+  --stream                   Stream output (default true; set --stream=false to disable)
 
 Examples:
   agent-wrapper run --provider claude-code "explain this code"
   agent-wrapper run --provider codex --model gpt-4 "fix the bug" --approve-all
+  agent-wrapper run --provider claude-code --json "hello"        # single JSON object
+  agent-wrapper run --provider claude-code --json --stream "hi"  # NDJSON stream
   agent-wrapper list
   agent-wrapper sessions
   agent-wrapper version`)
@@ -181,48 +186,80 @@ func cmdRun(args []string) {
 		maxTurns = 10
 	}
 
+	// Determine output format from flags.
+	outputFormat := types.OutputStream
+	if flags.json {
+		if flags.stream {
+			outputFormat = types.OutputStreamJSON
+		} else {
+			outputFormat = types.OutputJSON
+		}
+	}
+
 	input := types.RunInput{
 		Session:      session,
 		NewMessage:   func() *types.Message { m := types.NewUserMessage(flags.message); return &m }(),
 		SystemPrompt: systemPrompt,
 		WorkingDir:   flags.workingDir,
 		MaxTurns:     maxTurns,
+		OutputFormat: outputFormat,
 	}
 
-	events, err := orch.Run(ctx, input)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Print session ID for potential resume.
-	fmt.Fprintf(os.Stderr, "session: %s\n", session.ID)
-
-	// Stream events to stdout.
-	for evt := range events {
-		switch evt.Type {
-		case types.EventTextDelta:
-			fmt.Print(evt.TextDelta)
-		case types.EventToolCall:
-			fmt.Fprintf(os.Stderr, "[tool_call] %s(%s)\n", evt.ToolName, string(evt.ToolInput))
-		case types.EventToolResult:
-			prefix := "[tool_result]"
-			if evt.ToolResultError {
-				prefix = "[tool_error]"
-			}
-			fmt.Fprintf(os.Stderr, "%s %s\n", prefix, truncate(evt.ToolResultOutput, 200))
-		case types.EventTurnEnd:
-			fmt.Fprintln(os.Stderr)
-			if evt.TokenUsage != nil {
-				fmt.Fprintf(os.Stderr, "[tokens] in=%d out=%d total=%d\n",
-					evt.TokenUsage.InputTokens, evt.TokenUsage.OutputTokens, evt.TokenUsage.TotalTokens)
-			}
-		case types.EventError:
-			fmt.Fprintf(os.Stderr, "[error] %v\n", evt.Error)
+	switch outputFormat {
+	case types.OutputJSON:
+		result, err := orch.RunSync(ctx, input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
 		}
-	}
+		data, _ := json.Marshal(result)
+		fmt.Println(string(data))
 
-	fmt.Fprintln(os.Stderr)
+	case types.OutputStreamJSON:
+		events, err := orch.Run(ctx, input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		for evt := range events {
+			data, _ := json.Marshal(evt)
+			fmt.Println(string(data))
+		}
+
+	default: // OutputStream
+		events, err := orch.Run(ctx, input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Fprintf(os.Stderr, "session: %s\n", session.ID)
+
+		for evt := range events {
+			switch evt.Type {
+			case types.EventTextDelta:
+				fmt.Print(evt.TextDelta)
+			case types.EventToolCall:
+				fmt.Fprintf(os.Stderr, "[tool_call] %s(%s)\n", evt.ToolName, string(evt.ToolInput))
+			case types.EventToolResult:
+				prefix := "[tool_result]"
+				if evt.ToolResultError {
+					prefix = "[tool_error]"
+				}
+				fmt.Fprintf(os.Stderr, "%s %s\n", prefix, truncate(evt.ToolResultOutput, 200))
+			case types.EventTurnEnd:
+				fmt.Fprintln(os.Stderr)
+				if evt.TokenUsage != nil {
+					fmt.Fprintf(os.Stderr, "[tokens] in=%d out=%d total=%d\n",
+						evt.TokenUsage.InputTokens, evt.TokenUsage.OutputTokens, evt.TokenUsage.TotalTokens)
+				}
+			case types.EventError:
+				fmt.Fprintf(os.Stderr, "[error] %v\n", evt.Error)
+			}
+		}
+
+		fmt.Fprintln(os.Stderr)
+	}
 }
 
 func cmdList() {
@@ -276,11 +313,13 @@ type runFlags struct {
 	budgetTokens     int
 	sessionID        string
 	binaryPath       string
+	json             bool
+	stream           bool
 	message          string
 }
 
 func parseRunFlags(args []string) *runFlags {
-	f := &runFlags{}
+	f := &runFlags{stream: true}
 	i := 0
 	for i < len(args) {
 		switch args[i] {
@@ -326,6 +365,13 @@ func parseRunFlags(args []string) *runFlags {
 			if i < len(args) {
 				f.binaryPath = args[i]
 			}
+		case "--json":
+			f.json = true
+		case "--stream":
+			i++
+			if i < len(args) {
+				f.stream = parseBool(args[i])
+			}
 		case "--help", "-h":
 			printUsage()
 			os.Exit(0)
@@ -337,6 +383,15 @@ func parseRunFlags(args []string) *runFlags {
 		i++
 	}
 	return f
+}
+
+func parseBool(s string) bool {
+	switch strings.ToLower(s) {
+	case "true", "1", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func truncate(s string, max int) string {

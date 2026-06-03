@@ -10,7 +10,10 @@ import (
 	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/agents/acp"
 	"github.com/smallnest/agent-wrapper/agents/claude"
+	"github.com/smallnest/agent-wrapper/agents/agy"
 	"github.com/smallnest/agent-wrapper/agents/codex"
+	"github.com/smallnest/agent-wrapper/agents/cursor"
+	kimicode "github.com/smallnest/agent-wrapper/agents/kimi-code"
 	"github.com/smallnest/agent-wrapper/agents/opencode"
 	"github.com/smallnest/agent-wrapper/agents/pi"
 	"github.com/smallnest/agent-wrapper/types"
@@ -53,7 +56,7 @@ Commands:
   version   Show version
 
 Run flags:
-  --provider NAME            Provider: claude-code|codex|pi-agent|opencode (required)
+  --provider NAME            Provider: claude-code|codex|pi-agent|opencode|acp|agy|cursor|kimi-code (required)
   --model NAME               Model name (passed to provider)
   --max-turns N              Maximum turns (default: 10)
   --working-dir PATH         Working directory
@@ -103,6 +106,15 @@ func cmdRun(args []string) {
 	}
 	if err := acp.RegisterIn(registry); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: register acp: %v\n", err)
+	}
+	if err := agy.RegisterIn(registry); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: register agy: %v\n", err)
+	}
+	if err := cursor.RegisterIn(registry); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: register cursor: %v\n", err)
+	}
+	if err := kimicode.RegisterIn(registry); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: register kimi-code: %v\n", err)
 	}
 
 	// Create agent from registry.
@@ -238,6 +250,15 @@ func cmdList() {
 	}
 	if err := opencode.RegisterIn(registry); err != nil {
 		_ = acp.RegisterIn(registry) // best-effort
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+	if err := agy.RegisterIn(registry); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+	if err := cursor.RegisterIn(registry); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+	if err := kimicode.RegisterIn(registry); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 

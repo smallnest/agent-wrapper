@@ -14,16 +14,16 @@
 │  ┌──────────┐  ┌───────────────┐  ┌───────────┐ │
 │  │ Registry │  │ Orchestrator  │  │  Session  │ │
 │  │          │  │  ┌─────────┐  │  │  Store    │ │
-│  │ claude───┼──┼──► turn    │  │  │  (memory) │ │
-│  │ codex    │  │  │  loop   │  │  │           │ │
-│  │ pi       │  │  │  +hooks │  │  │           │ │
-│  │ opencode │  │  └─────────┘  │  │           │ │
+│  │    8 pro─┼──┼──► turn    │  │  │  (memory) │ │
+│  │   viders │  │  │  loop   │  │  │           │ │
+│  │          │  │  │  +hooks │  │  │           │ │
+│  │          │  │  └─────────┘  │  │           │ │
 │  └──────────┘  └───────┬───────┘  └───────────┘ │
 │                        │ Agent.Run()              │
 │  ┌─────────────────────▼────────────────────────┐ │
-│  │         Agent Implementations                │ │
-│  │  ClaudeCodeAgent  CodexAgent                 │ │
-│  │  PiAgent          OpenCodeAgent              │ │
+│  │    Provider Implementations  (subprocess)    │ │
+│  │  claude  cursor  kimi-code  agy  codex       │ │
+│  │  pi      opencode  acp                       │ │
 │  │                                              │ │
 │  │  ┌──────────────────────────────────────┐   │ │
 │  │  │        Process Manager                │   │ │
@@ -32,10 +32,10 @@
 │  └───────────────┼─────────────────────────────┘ │
 └──────────────────┼──────────────────────────────┘
                    │ stdin/stdout
-     ┌─────────────▼──────────────┐
-     │  Claude Code / Codex CLI   │
-     │  Pi Agent / OpenCode CLI   │
-     └────────────────────────────┘
+     ┌─────────────▼──────────────────────┐
+     │  Claude / Cursor / Kimi / Agy      │
+     │  Codex / Pi / OpenCode / ACP CLI   │
+     └────────────────────────────────────┘
 ```
 
 ## 核心接口
@@ -121,17 +121,20 @@ agent-wrapper/
 ├── agent.go           # Agent 接口
 ├── orchestrator.go    # Orchestrator 编排器
 ├── registry.go        # Registry 注册表
-├── session.go         # SessionStore 接口
 ├── approval.go        # 审批类型
 ├── budget.go          # 预算类型
+├── context_compress.go# 上下文压缩
 ├── types/             # 核心类型 (Message, Event, Session 等)
 ├── process/           # 子进程管理 + 协议解析器
-├── sessionstore/      # Session 存储实现
-│   └── memory/        # 内存存储
-├── claude/            # Claude Code agent
-├── codex/             # Codex agent
-├── pi/                # Pi agent
-├── opencode/          # OpenCode agent
+├── provider/          # 所有 provider 实现
+│   ├── acp/           # ACP agent
+│   ├── agy/           # Antigravity agent
+│   ├── claude/        # Claude Code agent
+│   ├── codex/         # Codex agent
+│   ├── cursor/        # Cursor Agent
+│   ├── kimi-code/     # Kimi Code agent
+│   ├── opencode/      # OpenCode agent
+│   └── pi/            # Pi agent
 ├── cmd/               # CLI 入口
 │   └── agent-wrapper/
 ├── docs/              # 中文文档

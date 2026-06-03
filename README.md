@@ -1,6 +1,6 @@
 # agent-wrapper
 
-Go 语言统一 coding agent 包装库。提供一致的接口驱动 Claude Code、Codex、Pi Agent、OpenCode 等 coding agent CLI。
+Go 语言统一 coding agent 包装库。提供一致的接口驱动 Claude Code、Cursor Agent、Kimi Code、Antigravity、Codex、Pi Agent、OpenCode 等 coding agent CLI。
 
 ## 为什么
 
@@ -16,7 +16,7 @@ import (
     "fmt"
 
     agentwrapper "github.com/smallnest/agent-wrapper"
-    "github.com/smallnest/agent-wrapper/claude"
+    "github.com/smallnest/agent-wrapper/provider/claude"
     "github.com/smallnest/agent-wrapper/types"
 )
 
@@ -60,24 +60,23 @@ func main() {
 │  ┌──────────┐  ┌───────────────┐  ┌───────────┐ │
 │  │ Registry │  │ Orchestrator  │  │  Session  │ │
 │  │          │  │  turn loop    │  │  Store    │ │
-│  │ claude───┼──┤  +hooks       │  │  (memory) │ │
-│  │ codex    │  │               │  │           │ │
-│  │ pi       │  │               │  │           │ │
-│  │ opencode │  │               │  │           │ │
+│  │    8 pro─┼──┤  +hooks       │  │  (memory) │ │
+│  │   viders │  │               │  │           │ │
 │  └──────────┘  └───────┬───────┘  └───────────┘ │
-│                        │                          │
+│                        │ Agent.Run()              │
 │  ┌─────────────────────▼────────────────────────┐ │
-│  │    Agent Implementations  (subprocess)       │ │
-│  │  ClaudeCodeAgent  CodexAgent  PiAgent        │ │
-│  │  OpenCodeAgent    Process Manager            │ │
+│  │    Provider Implementations  (subprocess)    │ │
+│  │  claude  cursor  kimi-code  agy  codex       │ │
+│  │  pi      opencode  acp                       │ │
+│  │  (all in provider/ directory)                │ │
 │  └──────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────┘
            │
-     ┌─────▼──────────────┐
-     │  Agent CLI 进程     │
-     │  claude / codex /   │
-     │  pi / opencode      │
-     └────────────────────┘
+     ┌─────▼──────────────────────┐
+     │  Agent CLI 进程             │
+     │  claude / cursor / kimi /   │
+     │  agy / codex / pi / acpx   │
+     └────────────────────────────┘
 ```
 
 ## 核心概念
@@ -90,13 +89,16 @@ func main() {
 
 ## Provider 支持
 
-| Provider | 协议 | 流式 | 工具调用 | Token 用量 |
-|----------|------|------|---------|-----------|
-| Claude Code | CLI 子进程 (stream-json) | ✅ | ✅ | ✅ |
-| Codex | CLI 子进程 (exec --json) | ✅ | ✅ | ✅ |
-| Pi Agent | CLI 子进程 (--mode json) | ✅ | ✅ | ❌ |
-| OpenCode | CLI 子进程 (run --format json) | ✅ | ✅ | ✅ |
-| ACP | ACP JSON-RPC over stdio | ✅ | ✅ | ✅ |
+| Provider | 协议 | 流式 | 工具调用 | Token 用量 | Session |
+|----------|------|------|---------|-----------|---------|
+| Claude Code | CLI stream-json (NDJSON) | ✅ | ✅ | ✅ | ✅ |
+| Cursor Agent | CLI --print stream-json | ✅ | ✅ | ✅ | ✅ |
+| Kimi Code | CLI --prompt stream-json | ✅ | ✅ | ✅ | ✅ |
+| Antigravity | CLI --print (plain text) | ❌ | ❌ | ❌ | ✅ |
+| Codex | CLI exec --json | ✅ | ✅ | ✅ | ✅ |
+| Pi Agent | CLI --mode json | ✅ | ✅ | ✅ | ✅ |
+| OpenCode | CLI run --format json | ✅ | ✅ | ✅ | ✅ |
+| ACP | ACP JSON-RPC over stdio | ✅ | ✅ | ✅ | ✅ |
 
 ## CLI
 
@@ -171,6 +173,8 @@ go build ./cmd/agent-wrapper
 | [#9](https://github.com/smallnest/agent-wrapper/issues/9) Orchestrator | ✅ |
 | [#10](https://github.com/smallnest/agent-wrapper/issues/10) CLI | ✅ |
 | [#11](https://github.com/smallnest/agent-wrapper/issues/11) Docs + Examples | ✅ |
+| [#45](https://github.com/smallnest/agent-wrapper/issues/45) ACP provider | ✅ |
+| [#47](https://github.com/smallnest/agent-wrapper/issues/47) + [#48](https://github.com/smallnest/agent-wrapper/issues/48) + [#49](https://github.com/smallnest/agent-wrapper/issues/49) + [#50](https://github.com/smallnest/agent-wrapper/issues/50) + [#51](https://github.com/smallnest/agent-wrapper/issues/51) Multi-agent expansion (agy, cursor, kimi-code) | ✅ |
 
 ## 与 ACP（Agent Client Protocol）对比
 

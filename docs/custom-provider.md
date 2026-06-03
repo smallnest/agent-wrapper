@@ -15,6 +15,8 @@ type Agent interface {
 }
 ```
 
+`Run` 返回事件 channel。同步聚合由 `Orchestrator.RunSync` 提供——它调用 `Run` 然后排空 channel 返回 `*RunResult`。
+
 ## 最小实现
 
 ```go
@@ -42,10 +44,7 @@ func (a *EchoAgent) Run(ctx context.Context, input types.RunInput) (<-chan types
         defer close(ch)
 
         // 获取用户消息
-        prompt := ""
-        if input.NewMessage != nil {
-            prompt = input.NewMessage.Content
-        }
+        prompt := input.Prompt
 
         // 发送 TextDelta
         ch <- types.Event{Type: types.EventTextDelta, TextDelta: "Echo: " + prompt}

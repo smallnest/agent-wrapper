@@ -18,7 +18,7 @@ import (
     "fmt"
 
     agentwrapper "github.com/smallnest/agent-wrapper"
-    "github.com/smallnest/agent-wrapper/claude"
+    "github.com/smallnest/agent-wrapper/provider/claude"
     "github.com/smallnest/agent-wrapper/types"
 )
 
@@ -91,7 +91,10 @@ go build -o bin/agent-wrapper ./cmd/agent-wrapper
 
 | Provider | 安装命令 |
 |----------|---------|
+| agy | 从 Google Labs 获取 |
 | claude-code | `npm install -g @anthropic-ai/claude-code` |
 | codex | `npm install -g @openai/codex` |
-| pi-agent | `npm install -g @anthropic-ai/pi` |
+| cursor | 通过 Cursor IDE 内置安装 |
+| kimi-code | `uv tool install kimi-code` |
 | opencode | `go install github.com/opencode-ai/opencode@latest` |
+| pi-agent | `npm install -g @anthropic-ai/pi` |

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
@@ -16,6 +15,7 @@ import (
 	"github.com/smallnest/agent-wrapper/pi"
 	"github.com/smallnest/agent-wrapper/sessionstore/memory"
 	"github.com/smallnest/agent-wrapper/types"
+	"github.com/spf13/pflag"
 )
 
 var version = "0.1.0"
@@ -319,66 +319,27 @@ type runFlags struct {
 }
 
 func parseRunFlags(args []string) *runFlags {
-	f := &runFlags{stream: true}
-	i := 0
-	for i < len(args) {
-		switch args[i] {
-		case "--provider":
-			i++
-			if i < len(args) {
-				f.provider = args[i]
-			}
-		case "--model":
-			i++
-			if i < len(args) {
-				f.model = args[i]
-			}
-		case "--max-turns":
-			i++
-			if i < len(args) {
-				_, _ = fmt.Sscanf(args[i], "%d", &f.maxTurns)
-			}
-		case "--working-dir":
-			i++
-			if i < len(args) {
-				f.workingDir = args[i]
-			}
-		case "--system-prompt-file":
-			i++
-			if i < len(args) {
-				f.systemPromptFile = args[i]
-			}
-		case "--approve-all":
-			f.approveAll = true
-		case "--budget-tokens":
-			i++
-			if i < len(args) {
-				_, _ = fmt.Sscanf(args[i], "%d", &f.budgetTokens)
-			}
-		case "--session-id":
-			i++
-			if i < len(args) {
-				f.sessionID = args[i]
-			}
-		case "--binary-path":
-			i++
-			if i < len(args) {
-				f.binaryPath = args[i]
-			}
-		case "--json":
-			f.json = true
-		case "--stream":
-			f.stream = true
-		case "--help", "-h":
-			printUsage()
-			os.Exit(0)
-		default:
-			if !strings.HasPrefix(args[i], "-") {
-				f.message = args[i]
-			}
-		}
-		i++
+	f := &runFlags{}
+	fs := pflag.NewFlagSet("run", pflag.ContinueOnError)
+	fs.StringVar(&f.provider, "provider", "", "Provider: claude-code|codex|pi-agent|opencode")
+	fs.StringVar(&f.model, "model", "", "Model name")
+	fs.IntVar(&f.maxTurns, "max-turns", 0, "Maximum turns")
+	fs.StringVar(&f.workingDir, "working-dir", "", "Working directory")
+	fs.StringVar(&f.systemPromptFile, "system-prompt-file", "", "Read system prompt from file")
+	fs.BoolVar(&f.approveAll, "approve-all", false, "Auto-approve all tool calls")
+	fs.IntVar(&f.budgetTokens, "budget-tokens", 0, "Token budget limit")
+	fs.StringVar(&f.sessionID, "session-id", "", "Resume an existing session")
+	fs.StringVar(&f.binaryPath, "binary-path", "", "Override agent CLI binary path")
+	fs.BoolVar(&f.json, "json", false, "Output in JSON format")
+	fs.BoolVar(&f.stream, "stream", true, "Stream output (set --stream=false to disable)")
+	_ = fs.Parse(args)
+
+	// Positional argument = message.
+	remaining := fs.Args()
+	if len(remaining) > 0 {
+		f.message = remaining[0]
 	}
+
 	return f
 }
 

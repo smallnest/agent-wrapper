@@ -171,6 +171,25 @@ go build ./cmd/agent-wrapper
 | [#10](https://github.com/smallnest/agent-wrapper/issues/10) CLI | ✅ |
 | [#11](https://github.com/smallnest/agent-wrapper/issues/11) Docs + Examples | ✅ |
 
+## 与 ACP（Agent Client Protocol）对比
+
+[ACP](https://agentclientprotocol.com/get-started/introduction) 是编辑器与 agent 之间的通信协议标准，定位类似 LSP——定义 JSON-RPC 消息格式让任何编辑器对接任何 agent。
+
+agent-wrapper 与 ACP 是互补关系，非竞争关系：
+
+| 维度 | ACP | agent-wrapper |
+|------|-----|---------------|
+| **定位** | 协议标准——定义 agent 和 editor 之间怎么通信 | 运行时库——封装 agent CLI 进程并提供持久化、审批、重试 |
+| **解决的问题** | "我写的 agent 怎么对接多个编辑器" | "我已经有多个 agent CLI，怎么统一调用、编排、容错" |
+| **抽象层** | 传输层（JSON-RPC over stdio/HTTP） | 进程控制层（子进程生命周期 + event 流 + turn 循环） |
+| **Agent 实现方** | agent 方必须实现 ACP 协议 | agent 只需有 CLI，wrap 即可——无需修改 agent 自身 |
+| **Session 管理** | 不定义 session 持久化 | 透传 agent runtime session + `RunResult.SessionID` 可存储恢复 |
+| **错误恢复** | 无内置重试/压缩 | 内置上下文超限检测 → 滑动窗口 → 摘要压缩 → 重试，最多 N 次 |
+| **审批/预算** | 不涉及 | Orchestrator 内置审批 handler + token 预算控制 |
+| **多 provider** | 需每个 agent 实现协议 | Registry 注册即可，4 个内置 provider + 自定义 |
+
+**关键区别：ACP 是一份协议，agent-wrapper 是一份实现。** ACP 说"你应该用这个 JSON 格式对话"，agent-wrapper 说"给我任意 agent CLI，我来跑、来容错、来治理"。两者可以组合使用——agent-wrapper 作为 ACP agent 的宿主运行时。
+
 ## License
 
 MIT

@@ -18,7 +18,7 @@ import (
 	"time"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
-	"github.com/smallnest/agent-wrapper/agents/claude"
+	"github.com/smallnest/agent-wrapper/provider/claude"
 	"github.com/smallnest/agent-wrapper/types"
 )
 

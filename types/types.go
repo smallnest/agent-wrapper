@@ -171,6 +171,22 @@ type TokenUsage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
+// OutputFormat controls how the orchestrator or CLI emits results.
+type OutputFormat string
+
+const (
+	OutputStream     OutputFormat = "stream"
+	OutputJSON       OutputFormat = "json"
+	OutputStreamJSON OutputFormat = "stream-json"
+)
+
+// RunResult is the aggregated result of an orchestrated agent run.
+type RunResult struct {
+	Text      string      `json:"text"`
+	Usage     *TokenUsage `json:"usage"`
+	SessionID string      `json:"session_id"`
+}
+
 // RunInput 是一次 agent 调用的全部输入。
 type RunInput struct {
 	Session      *Session
@@ -180,4 +196,5 @@ type RunInput struct {
 	MaxTurns     int
 	AllowedTools []string
 	Extra        map[string]any
+	OutputFormat OutputFormat
 }

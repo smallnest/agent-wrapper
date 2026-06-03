@@ -9,6 +9,7 @@ import (
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/claude"
+	"github.com/smallnest/agent-wrapper/acp"
 	"github.com/smallnest/agent-wrapper/codex"
 	"github.com/smallnest/agent-wrapper/opencode"
 	"github.com/smallnest/agent-wrapper/pi"
@@ -97,7 +98,11 @@ func cmdRun(args []string) {
 		fmt.Fprintf(os.Stderr, "warning: register pi-agent: %v\n", err)
 	}
 	if err := opencode.RegisterIn(registry); err != nil {
+	_ = acp.RegisterIn(registry) // best-effort
 		fmt.Fprintf(os.Stderr, "warning: register opencode: %v\n", err)
+	}
+	if err := acp.RegisterIn(registry); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: register acp: %v\n", err)
 	}
 
 	// Create agent from registry.
@@ -232,6 +237,7 @@ func cmdList() {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 	if err := opencode.RegisterIn(registry); err != nil {
+	_ = acp.RegisterIn(registry) // best-effort
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 

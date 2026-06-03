@@ -9,12 +9,15 @@ import (
 )
 
 // Orchestrator drives multi-turn agent conversations with approval,
-// budget control, and session context accumulation.
+// budget control, session context accumulation, and context-length
+// retry with compression.
 type Orchestrator struct {
-	agent    Agent
-	store    SessionStore
-	approval ApprovalHandler
-	budget   BudgetHandler
+	agent      Agent
+	store      SessionStore
+	approval   ApprovalHandler
+	budget     BudgetHandler
+	compressor ContextCompressor
+	maxRetries int
 }
 
 // OrchestratorOption configures an Orchestrator.
@@ -31,9 +34,31 @@ func WithBudgetHandler(h BudgetHandler) OrchestratorOption {
 	return func(o *Orchestrator) { o.budget = h }
 }
 
+// WithContextCompressor sets the compressor used when retrying after
+// a context-length error. If not set, defaults to a chained compressor:
+// SlidingWindowCompressor(20) → SummaryCompressor(20, nil).
+func WithContextCompressor(c ContextCompressor) OrchestratorOption {
+	return func(o *Orchestrator) { o.compressor = c }
+}
+
+// WithMaxRetries sets the maximum number of retry attempts after a
+// context-length error. If not set, defaults to 3. When 0, no retry
+// is attempted even when the error matches.
+func WithMaxRetries(n int) OrchestratorOption {
+	if n < 0 {
+		n = 0
+	}
+	return func(o *Orchestrator) { o.maxRetries = n }
+}
+
 // NewOrchestrator creates an Orchestrator for the given agent and session store.
 func NewOrchestrator(agent Agent, store SessionStore, opts ...OrchestratorOption) *Orchestrator {
-	o := &Orchestrator{agent: agent, store: store}
+	o := &Orchestrator{
+		agent:      agent,
+		store:      store,
+		compressor: NewChainedCompressor(NewSlidingWindowCompressor(20), NewSummaryCompressor(20, nil)),
+		maxRetries: 3,
+	}
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -44,8 +69,8 @@ func NewOrchestrator(agent Agent, store SessionStore, opts ...OrchestratorOption
 func (o *Orchestrator) Agent() Agent { return o.agent }
 
 // Run executes the orchestrator loop: appends NewMessage to the session,
-// calls Agent.Run, processes the event stream with approval/budget/writeback,
-// and returns a downstream event channel for the caller.
+// calls Agent.Run with context-length retry, processes the event stream
+// with approval/budget/writeback, and returns a downstream event channel.
 func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan types.Event, error) {
 	session := input.Session
 	if session == nil {
@@ -53,15 +78,16 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 	}
 
 	// Append NewMessage to session.
-	if input.NewMessage != nil {
-		session.Messages = append(session.Messages, *input.NewMessage)
+	newMessage := input.NewMessage
+	if newMessage != nil {
+		session.Messages = append(session.Messages, *newMessage)
 		session.UpdatedAt = time.Now()
 	}
 
-	// Build RunInput for the agent.
+	// Build agentInput (without NewMessage — already appended).
 	agentInput := types.RunInput{
 		Session:      session,
-		NewMessage:   nil, // already appended
+		NewMessage:   nil,
 		SystemPrompt: input.SystemPrompt,
 		WorkingDir:   input.WorkingDir,
 		MaxTurns:     input.MaxTurns,
@@ -69,7 +95,8 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 		Extra:        input.Extra,
 	}
 
-	eventCh, err := o.agent.Run(ctx, agentInput)
+	// Retry loop: on ContextLengthExceededError, compress and retry.
+	eventCh, err := o.runAgentWithRetry(ctx, agentInput, session, newMessage)
 	if err != nil {
 		return nil, fmt.Errorf("orchestrator: agent run: %w", err)
 	}
@@ -200,6 +227,32 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 	}()
 
 	return out, nil
+}
+
+// runAgentWithRetry calls agent.Run with retry on context-length errors.
+func (o *Orchestrator) runAgentWithRetry(
+	ctx context.Context,
+	agentInput types.RunInput,
+	session *types.Session,
+	newMessage *types.Message,
+) (<-chan types.Event, error) {
+	for attempt := 0; ; attempt++ {
+		eventCh, err := o.agent.Run(ctx, agentInput)
+		if err == nil {
+			return eventCh, nil
+		}
+
+		if !IsContextLengthExceeded(err) || attempt >= o.maxRetries {
+			return nil, err
+		}
+
+		// Compress and re-append the current turn's user message.
+		session.Messages = o.compressor.Compress(session.Messages)
+		if newMessage != nil {
+			session.Messages = append(session.Messages, *newMessage)
+		}
+		agentInput.NewMessage = nil
+	}
 }
 
 func (o *Orchestrator) decideApproval(ctx context.Context, evt types.Event) *Decision {

@@ -118,17 +118,12 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 		return nil, err
 	}
 
-	// Build the prompt from session messages or new message.
-	messages := input.Session.Messages
-	if input.NewMessage != nil {
-		messages = append(messages, *input.NewMessage)
-	}
-	prompt := lastUserMessage(messages)
-	if prompt == "" {
-		return nil, fmt.Errorf("codex: no user message found in input")
+	// Use Prompt from RunInput.
+	if input.Prompt == "" {
+		return nil, fmt.Errorf("codex: no prompt provided")
 	}
 
-	args := []string{"exec", prompt, "--json"}
+	args := []string{"exec", input.Prompt, "--json"}
 	if a.opts.Model != "" {
 		args = append(args, "--model", a.opts.Model)
 	}
@@ -239,12 +234,3 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 	return events, nil
 }
 
-// lastUserMessage returns the last user message content from the message list.
-func lastUserMessage(msgs []types.Message) string {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == types.RoleUser {
-			return msgs[i].Content
-		}
-	}
-	return ""
-}

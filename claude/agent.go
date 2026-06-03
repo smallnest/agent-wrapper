@@ -122,17 +122,12 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 		return nil, err
 	}
 
-	// Build the prompt from session messages or new message.
-	messages := input.Session.Messages
-	if input.NewMessage != nil {
-		messages = append(messages, *input.NewMessage)
-	}
-	prompt := lastUserMessage(messages)
-	if prompt == "" {
-		return nil, fmt.Errorf("claude: no user message found in input")
+	// Use Prompt from RunInput.
+	if input.Prompt == "" {
+		return nil, fmt.Errorf("claude: no prompt provided")
 	}
 
-	args := []string{"-p", prompt, "--output-format", "stream-json", "--verbose"}
+	args := []string{"-p", input.Prompt, "--output-format", "stream-json", "--verbose"}
 	if a.opts.Model != "" {
 		args = append(args, "--model", a.opts.Model)
 	}
@@ -255,12 +250,3 @@ func parseClaudeEvent(data []byte) (types.Event, bool) {
 	return types.Event{}, false
 }
 
-// lastUserMessage returns the last user message content from the message list.
-func lastUserMessage(msgs []types.Message) string {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == types.RoleUser {
-			return msgs[i].Content
-		}
-	}
-	return ""
-}

@@ -1,10 +1,7 @@
 package types
 
 import (
-	"crypto/rand"
 	"encoding/json"
-	"fmt"
-	"time"
 )
 
 // Provider 标识底层 agent 实现。
@@ -85,48 +82,6 @@ func NewToolResultMessage(callID, content string, isError bool) Message {
 	}
 }
 
-// Session 代表一个跨 turn 保持的会话上下文。
-type Session struct {
-	ID        string            `json:"id"`
-	Messages  []Message         `json:"messages"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
-	Metadata  map[string]string `json:"metadata,omitempty"`
-}
-
-// SessionSummary 是 session 的元数据摘要，不含完整消息体。
-type SessionSummary struct {
-	ID           string    `json:"id"`
-	MessageCount int       `json:"message_count"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
-// NewSession 创建一个空的 Session。
-func NewSession() *Session {
-	now := time.Now()
-	return &Session{
-		ID:        newUUID(),
-		Messages:  make([]Message, 0),
-		CreatedAt: now,
-		UpdatedAt: now,
-		Metadata:  make(map[string]string),
-	}
-}
-
-// newUUID 生成 RFC 9562 UUID v4。
-func newUUID() string {
-	var b [16]byte
-	_, err := rand.Read(b[:])
-	if err != nil {
-		panic(fmt.Sprintf("agentwrapper: crypto/rand failed: %v", err))
-	}
-	b[6] = (b[6] & 0x0f) | 0x40 // version 4
-	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
-}
-
 // EventType 表示 agent 产生的事件的类型。
 type EventType string
 
@@ -189,8 +144,8 @@ type RunResult struct {
 
 // RunInput 是一次 agent 调用的全部输入。
 type RunInput struct {
-	Session      *Session
-	NewMessage   *Message
+	Prompt       string
+	SessionID    string
 	SystemPrompt string
 	WorkingDir   string
 	MaxTurns     int

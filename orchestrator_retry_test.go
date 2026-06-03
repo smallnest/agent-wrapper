@@ -20,18 +20,9 @@ func TestRetrySingleSuccess(t *testing.T) {
 	}
 
 	comp := &countingCompressor{}
-	store := newMockStore()
-	session := types.NewSession()
-	session.Messages = append(session.Messages,
-		types.NewUserMessage("old1"),
-		types.NewAssistantMessage("old2"),
-		types.NewUserMessage("old3"),
-	)
-
-	orch := NewOrchestrator(retryAgent, store, WithContextCompressor(comp), WithMaxRetries(3))
+	orch := NewOrchestrator(retryAgent, WithContextCompressor(comp), WithMaxRetries(3))
 	out, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("latest"); return &m }(),
+		Prompt: "latest",
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -46,31 +37,15 @@ func TestRetrySingleSuccess(t *testing.T) {
 	if comp.calls != 1 {
 		t.Errorf("expected 1 compress call, got %d", comp.calls)
 	}
-	// Latest user message must survive compression.
-	found := false
-	for _, m := range session.Messages {
-		if m.Role == types.RoleUser && m.Content == "latest" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected 'latest' user message to survive compression+retry")
-	}
 }
 
 func TestRetryExhaustion(t *testing.T) {
-	// Always returns context-length error (numErrors=10 but maxRetries=3).
 	retryAgent := &retryingAgent{numErrors: 10, errMsg: "too long"}
 
 	comp := &countingCompressor{}
-	store := newMockStore()
-	session := types.NewSession()
-
-	orch := NewOrchestrator(retryAgent, store, WithContextCompressor(comp), WithMaxRetries(3))
+	orch := NewOrchestrator(retryAgent, WithContextCompressor(comp), WithMaxRetries(3))
 	_, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("go"); return &m }(),
+		Prompt: "go",
 	})
 	if err == nil {
 		t.Fatal("expected error after retry exhaustion")
@@ -78,7 +53,7 @@ func TestRetryExhaustion(t *testing.T) {
 	if !IsContextLengthExceeded(err) {
 		t.Errorf("expected ContextLengthExceededError, got %T: %v", err, err)
 	}
-	if retryAgent.Runs() != 4 { // initial + 3 retries
+	if retryAgent.Runs() != 4 {
 		t.Errorf("expected 4 runs, got %d", retryAgent.Runs())
 	}
 	if comp.calls != 3 {
@@ -87,17 +62,12 @@ func TestRetryExhaustion(t *testing.T) {
 }
 
 func TestRetryNonContextErrorPassthrough(t *testing.T) {
-	// Returns a plain (non-context-length) error.
 	plainAgent := &plainErrorAgent{err: fmt.Errorf("network timeout")}
 
 	comp := &countingCompressor{}
-	store := newMockStore()
-	session := types.NewSession()
-
-	orch := NewOrchestrator(plainAgent, store, WithContextCompressor(comp), WithMaxRetries(3))
+	orch := NewOrchestrator(plainAgent, WithContextCompressor(comp), WithMaxRetries(3))
 	_, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("go"); return &m }(),
+		Prompt: "go",
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -116,13 +86,9 @@ func TestRetryNonContextErrorPassthrough(t *testing.T) {
 func TestRetryMaxRetriesZero(t *testing.T) {
 	retryAgent := &retryingAgent{numErrors: 1, errMsg: "too long"}
 
-	store := newMockStore()
-	session := types.NewSession()
-
-	orch := NewOrchestrator(retryAgent, store, WithMaxRetries(0))
+	orch := NewOrchestrator(retryAgent, WithMaxRetries(0))
 	_, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("go"); return &m }(),
+		Prompt: "go",
 	})
 	if err == nil {
 		t.Fatal("expected error when maxRetries is 0")
@@ -141,16 +107,9 @@ func TestRetryDefaultCompressor(t *testing.T) {
 		},
 	}
 
-	store := newMockStore()
-	session := types.NewSession()
-	for i := range 50 {
-		session.Messages = append(session.Messages, types.NewUserMessage(fmt.Sprintf("msg-%d", i)))
-	}
-
-	orch := NewOrchestrator(retryAgent, store)
+	orch := NewOrchestrator(retryAgent)
 	out, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("latest"); return &m }(),
+		Prompt: "latest",
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -160,54 +119,9 @@ func TestRetryDefaultCompressor(t *testing.T) {
 	if retryAgent.Runs() != 2 {
 		t.Errorf("expected 2 runs, got %d", retryAgent.Runs())
 	}
-	if len(session.Messages) >= 51 {
-		t.Errorf("expected session messages compressed (was %d)", len(session.Messages))
-	}
-}
-
-func TestRetryPreservesLatestUserMessage(t *testing.T) {
-	retryAgent := &retryingAgent{
-		numErrors: 1, errMsg: "too long",
-		events: []types.Event{
-			{Type: types.EventTextDelta, TextDelta: "done"},
-			{Type: types.EventTurnEnd, TurnNumber: 1, StopReason: "end_turn"},
-		},
-	}
-
-	comp := &countingCompressor{}
-	store := newMockStore()
-	session := types.NewSession()
-	session.Messages = append(session.Messages,
-		types.NewUserMessage("msg-1"),
-		types.NewAssistantMessage("ans-1"),
-		types.NewUserMessage("msg-2"),
-	)
-
-	orch := NewOrchestrator(retryAgent, store, WithContextCompressor(comp), WithMaxRetries(3))
-	out, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("this-is-the-latest"); return &m }(),
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	for range out {
-	}
-
-	var lastUser string
-	for i := len(session.Messages) - 1; i >= 0; i-- {
-		if session.Messages[i].Role == types.RoleUser {
-			lastUser = session.Messages[i].Content
-			break
-		}
-	}
-	if lastUser != "this-is-the-latest" {
-		t.Errorf("expected last user message 'this-is-the-latest', got %q", lastUser)
-	}
 }
 
 func TestRetryKeywordMatchTrigger(t *testing.T) {
-	// Plain error with keyword triggers retry even without typed error.
 	keywordAgent := &keywordErrorAgent{
 		err: fmt.Errorf("request failed: context length exceeded"),
 		events: []types.Event{
@@ -217,13 +131,9 @@ func TestRetryKeywordMatchTrigger(t *testing.T) {
 	}
 
 	comp := &countingCompressor{}
-	store := newMockStore()
-	session := types.NewSession()
-
-	orch := NewOrchestrator(keywordAgent, store, WithContextCompressor(comp), WithMaxRetries(3))
+	orch := NewOrchestrator(keywordAgent, WithContextCompressor(comp), WithMaxRetries(3))
 	out, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("test"); return &m }(),
+		Prompt: "test",
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -239,9 +149,41 @@ func TestRetryKeywordMatchTrigger(t *testing.T) {
 	}
 }
 
+func TestRunSyncSuccessRetry(t *testing.T) {
+	retryAgent := &retryingAgent{
+		numErrors: 1, errMsg: "too long",
+		events: []types.Event{
+			{Type: types.EventTextDelta, TextDelta: "Hello"},
+			{Type: types.EventTextDelta, TextDelta: " world"},
+			{Type: types.EventTurnEnd, TurnNumber: 1, StopReason: "end_turn",
+				TokenUsage: &types.TokenUsage{InputTokens: 10, OutputTokens: 5, TotalTokens: 15}},
+		},
+	}
+
+	orch := NewOrchestrator(retryAgent, WithMaxRetries(3))
+	result, err := orch.RunSync(context.Background(), types.RunInput{
+		Prompt:    "go",
+		SessionID: "test-session",
+	})
+	if err != nil {
+		t.Fatalf("RunSync: %v", err)
+	}
+	if result.Text != "Hello world" {
+		t.Errorf("expected 'Hello world', got %q", result.Text)
+	}
+	if result.Usage == nil {
+		t.Fatal("expected non-nil Usage")
+	}
+	if result.Usage.TotalTokens != 15 {
+		t.Errorf("expected 15 total tokens, got %d", result.Usage.TotalTokens)
+	}
+	if result.SessionID != "test-session" {
+		t.Errorf("expected 'test-session', got %q", result.SessionID)
+	}
+}
+
 // --- helpers ---
 
-// retryingAgent returns ContextLengthExceededError for first numErrors calls, then succeeds.
 type retryingAgent struct {
 	numErrors int
 	errMsg    string
@@ -285,7 +227,6 @@ func (a *retryingAgent) Runs() int {
 	return a.runs
 }
 
-// plainErrorAgent always returns a plain (non-context-length) error.
 type plainErrorAgent struct {
 	err  error
 	runs int
@@ -309,7 +250,6 @@ func (a *plainErrorAgent) Runs() int {
 	return a.runs
 }
 
-// keywordErrorAgent returns a plain error with context-length keyword once, then succeeds.
 type keywordErrorAgent struct {
 	err    error
 	events []types.Event
@@ -352,7 +292,6 @@ func (a *keywordErrorAgent) Runs() int {
 	return a.runs
 }
 
-// countingCompressor records how many times Compress was called.
 type countingCompressor struct {
 	calls int
 	mu    sync.Mutex

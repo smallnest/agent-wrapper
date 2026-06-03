@@ -148,12 +148,10 @@ func cmdRun(args []string) {
 		}
 	}
 
-	session := types.NewSession()
-	orch := agentwrapper.NewOrchestrator(agent, nil)
+	orch := agentwrapper.NewOrchestrator(agent)
 
 	input := types.RunInput{
-		Session:      session,
-		NewMessage:   func() *types.Message { m := types.NewUserMessage(flags.message); return &m }(),
+		Prompt:       flags.message,
 		SystemPrompt: systemPrompt,
 		WorkingDir:   flags.workingDir,
 		MaxTurns:     maxTurns,

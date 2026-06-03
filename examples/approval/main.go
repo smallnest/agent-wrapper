@@ -1,8 +1,3 @@
-// approval 演示交互式审批流程。
-//
-// 使用方法:
-//
-//	go run main.go
 package main
 
 import (
@@ -12,7 +7,6 @@ import (
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/claude"
-	"github.com/smallnest/agent-wrapper/sessionstore/memory"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -26,36 +20,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := memory.New()
-	session, err := store.Create()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "create session: %v\n", err)
-		os.Exit(1)
-	}
-
-	// 配置审批 handler：只允许只读工具，拒绝写操作
-	orch := agentwrapper.NewOrchestrator(agent, store,
+	orch := agentwrapper.NewOrchestrator(agent,
 		agentwrapper.WithApprovalHandler(func(ctx context.Context, call agentwrapper.ToolCall) (*agentwrapper.Decision, error) {
-			fmt.Printf("\n🔧 Agent 请求执行工具: %s\n", call.Name)
-			fmt.Printf("   参数: %s\n", string(call.Input))
-
+			fmt.Printf("\n[tool] %s(%s)\n", call.Name, string(call.Input))
 			switch call.Name {
 			case "read", "ls", "grep", "glob", "view":
-				fmt.Println("   ✅ 只读工具 → 允许")
 				return &agentwrapper.Decision{Action: agentwrapper.ActionAllow}, nil
 			default:
-				fmt.Println("   ❌ 写操作工具 → 拒绝")
-				return &agentwrapper.Decision{
-					Action: agentwrapper.ActionDeny,
-					Reason: "只允许只读工具，写入操作被禁止",
-				}, nil
+				return &agentwrapper.Decision{Action: agentwrapper.ActionDeny, Reason: "write tools blocked"}, nil
 			}
 		}),
 	)
 
 	events, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("帮我创建一个 hello.go 文件"); return &m }(),
+		Prompt: "create a hello.go file",
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run: %v\n", err)

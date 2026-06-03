@@ -131,17 +131,12 @@ func (a *OpenCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan t
 		return nil, err
 	}
 
-	// Build the prompt from session messages or new message.
-	messages := input.Session.Messages
-	if input.NewMessage != nil {
-		messages = append(messages, *input.NewMessage)
-	}
-	prompt := lastUserMessage(messages)
-	if prompt == "" {
-		return nil, fmt.Errorf("opencode: no user message found in input")
+	// Use Prompt from RunInput.
+	if input.Prompt == "" {
+		return nil, fmt.Errorf("opencode: no prompt provided")
 	}
 
-	args := []string{"run", prompt, "--format", "json"}
+	args := []string{"run", input.Prompt, "--format", "json"}
 	if a.opts.Model != "" {
 		args = append(args, "-m", a.opts.Model)
 	}
@@ -279,12 +274,3 @@ func parseOpenCodeEvent(data []byte) (types.Event, bool) {
 	return types.Event{}, false
 }
 
-// lastUserMessage returns the last user message content from the message list.
-func lastUserMessage(msgs []types.Message) string {
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == types.RoleUser {
-			return msgs[i].Content
-		}
-	}
-	return ""
-}

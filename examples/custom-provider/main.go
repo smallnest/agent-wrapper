@@ -1,8 +1,3 @@
-// custom-provider 演示如何编写和注册自定义 provider。
-//
-// 使用方法:
-//
-//	go run main.go
 package main
 
 import (
@@ -12,11 +7,10 @@ import (
 	"strings"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
-	"github.com/smallnest/agent-wrapper/sessionstore/memory"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
-// EchoAgent 是一个最简的 Agent 实现，将用户消息原样返回。
+// EchoAgent returns the prompt as-is.
 type EchoAgent struct{}
 
 func NewEchoAgent() *EchoAgent { return &EchoAgent{} }
@@ -31,19 +25,7 @@ func (a *EchoAgent) Run(ctx context.Context, input types.RunInput) (<-chan types
 	go func() {
 		defer close(ch)
 
-		prompt := ""
-		if input.NewMessage != nil {
-			prompt = input.NewMessage.Content
-		} else if len(input.Session.Messages) > 0 {
-			for i := len(input.Session.Messages) - 1; i >= 0; i-- {
-				if input.Session.Messages[i].Role == types.RoleUser {
-					prompt = input.Session.Messages[i].Content
-					break
-				}
-			}
-		}
-
-		// 模拟流式输出：逐字发送
+		prompt := input.Prompt
 		response := "Echo: " + strings.ToUpper(prompt)
 		for _, r := range response {
 			select {
@@ -65,7 +47,6 @@ func (a *EchoAgent) Run(ctx context.Context, input types.RunInput) (<-chan types
 }
 
 func main() {
-	// 创建 Registry 并注册自定义 provider
 	registry := agentwrapper.NewRegistry()
 	err := registry.Register("echo", func(opts map[string]any) (agentwrapper.Agent, error) {
 		return NewEchoAgent(), nil
@@ -75,41 +56,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 通过 Registry 创建 agent
 	agent, err := registry.Get("echo", nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "get agent: %v\n", err)
 		os.Exit(1)
 	}
 
-	// 创建 session 和 orchestrator
-	store := memory.New()
-	session, err := store.Create()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "create session: %v\n", err)
-		os.Exit(1)
-	}
-
-	orch := agentwrapper.NewOrchestrator(agent, store)
+	orch := agentwrapper.NewOrchestrator(agent)
 	events, err := orch.Run(context.Background(), types.RunInput{
-		Session:    session,
-		NewMessage: func() *types.Message { m := types.NewUserMessage("hello world"); return &m }(),
+		Prompt: "hello world",
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Print("响应: ")
+	fmt.Print("Response: ")
 	for evt := range events {
 		switch evt.Type {
 		case types.EventTextDelta:
 			fmt.Print(evt.TextDelta)
 		case types.EventTurnEnd:
-			fmt.Printf("\n[turn %d 结束, reason=%s]\n", evt.TurnNumber, evt.StopReason)
+			fmt.Printf("\n[turn %d end, reason=%s]\n", evt.TurnNumber, evt.StopReason)
 		}
 	}
-
-	fmt.Printf("\nsession ID: %s\n", session.ID)
-	fmt.Printf("session 消息数: %d\n", len(session.Messages))
 }

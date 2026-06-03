@@ -224,6 +224,39 @@ func TestContextCancellation(t *testing.T) {
 	}
 }
 
+func TestContextLengthError(t *testing.T) {
+	// Mock a subprocess that writes a context-length error to stderr and fails.
+	dir := t.TempDir()
+	script := filepath.Join(dir, "opencode")
+	content := "#!/bin/sh\n"
+	content += `echo '{"type":"content_delta","content":"ok"}'` + "\n"
+	content += "echo 'max_tokens exceeded' >&2\n"
+	content += "exit 1\n"
+	_ = os.WriteFile(script, []byte(content), 0o755)
+
+	agent := New(Options{BinaryPath: script})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for evt := range events {
+		if evt.Type == types.EventError {
+			if evt.Error == nil {
+				t.Fatal("expected non-nil error in EventError")
+			}
+			if !agentwrapper.IsContextLengthExceeded(evt.Error) {
+				t.Errorf("expected ContextLengthExceededError, got %T: %v", evt.Error, evt.Error)
+			}
+			return
+		}
+	}
+	t.Fatal("never received error event")
+}
+
 func TestNameAndProvider(t *testing.T) {
 	agent := New(Options{})
 	if agent.Name() != "OpenCode" {

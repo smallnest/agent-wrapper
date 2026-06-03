@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -250,6 +251,39 @@ func TestContextCancellation(t *testing.T) {
 	if !gotEvent {
 		t.Error("expected at least one text_delta before cancellation")
 	}
+}
+
+func TestContextLengthError(t *testing.T) {
+	// Mock a subprocess that writes a context-length error to stderr and fails.
+	dir := t.TempDir()
+	script := filepath.Join(dir, "codex")
+	content := "#!/bin/sh\n"
+	content += `echo '{"type":"message_delta","delta":"ok"}'` + "\n"
+	content += "echo 'context length exceeded: too many tokens' >&2\n"
+	content += "exit 1\n"
+	_ = os.WriteFile(script, []byte(content), 0o755)
+
+	agent := New(Options{BinaryPath: script})
+	session := types.NewSession()
+	session.Messages = append(session.Messages, types.NewUserMessage("test"))
+
+	events, err := agent.Run(context.Background(), types.RunInput{Session: session})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for evt := range events {
+		if evt.Type == types.EventError {
+			if evt.Error == nil {
+				t.Fatal("expected non-nil error in EventError")
+			}
+			if !agentwrapper.IsContextLengthExceeded(evt.Error) {
+				t.Errorf("expected ContextLengthExceededError, got %T: %v", evt.Error, evt.Error)
+			}
+			return
+		}
+	}
+	t.Fatal("never received error event")
 }
 
 func TestNameAndProvider(t *testing.T) {

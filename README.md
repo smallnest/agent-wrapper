@@ -158,24 +158,6 @@ go build ./cmd/agent-wrapper
 | [审批流程](docs/approval.md) | 审批详解 |
 | [自定义 Provider](docs/custom-provider.md) | 编写自定义 provider |
 
-## 状态
-
-| Issue | 状态 |
-|-------|------|
-| [#1](https://github.com/smallnest/agent-wrapper/issues/1) Core Types | ✅ |
-| [#2](https://github.com/smallnest/agent-wrapper/issues/2) Process Manager | ✅ |
-| [#3](https://github.com/smallnest/agent-wrapper/issues/3) MemorySessionStore | ✅ |
-| [#4](https://github.com/smallnest/agent-wrapper/issues/4) Registry | ✅ |
-| [#5](https://github.com/smallnest/agent-wrapper/issues/5) ClaudeCodeAgent | ✅ |
-| [#6](https://github.com/smallnest/agent-wrapper/issues/6) CodexAgent | ✅ |
-| [#7](https://github.com/smallnest/agent-wrapper/issues/7) PiAgent | ✅ |
-| [#8](https://github.com/smallnest/agent-wrapper/issues/8) OpenCodeAgent | ✅ |
-| [#9](https://github.com/smallnest/agent-wrapper/issues/9) Orchestrator | ✅ |
-| [#10](https://github.com/smallnest/agent-wrapper/issues/10) CLI | ✅ |
-| [#11](https://github.com/smallnest/agent-wrapper/issues/11) Docs + Examples | ✅ |
-| [#45](https://github.com/smallnest/agent-wrapper/issues/45) ACP provider | ✅ |
-| [#47](https://github.com/smallnest/agent-wrapper/issues/47) + [#48](https://github.com/smallnest/agent-wrapper/issues/48) + [#49](https://github.com/smallnest/agent-wrapper/issues/49) + [#50](https://github.com/smallnest/agent-wrapper/issues/50) + [#51](https://github.com/smallnest/agent-wrapper/issues/51) Multi-agent expansion (agy, cursor, kimi-code) | ✅ |
-
 ## 与 ACP（Agent Client Protocol）对比
 
 [ACP](https://agentclientprotocol.com/get-started/introduction) 是编辑器与 agent 之间的通信协议标准，定位类似 LSP——定义 JSON-RPC 消息格式让任何编辑器对接任何 agent。

@@ -229,6 +229,39 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 	return out, nil
 }
 
+// RunSync calls Run and drains the event channel, returning an aggregated
+// RunResult. On error or context cancellation, *RunResult is nil.
+func (o *Orchestrator) RunSync(ctx context.Context, input types.RunInput) (*types.RunResult, error) {
+	eventCh, err := o.Run(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+
+	var text string
+	var usage *types.TokenUsage
+
+	for evt := range eventCh {
+		switch evt.Type {
+		case types.EventTextDelta:
+			text += evt.TextDelta
+		case types.EventTurnEnd:
+			if evt.TokenUsage != nil {
+				usage = evt.TokenUsage
+			}
+		case types.EventError:
+			if evt.Error != nil {
+				return nil, evt.Error
+			}
+		}
+	}
+
+	return &types.RunResult{
+		Text:      text,
+		Usage:     usage,
+		SessionID: input.Session.ID,
+	}, nil
+}
+
 // runAgentWithRetry calls agent.Run with retry on context-length errors.
 func (o *Orchestrator) runAgentWithRetry(
 	ctx context.Context,

@@ -23,11 +23,11 @@ func TestRegistry_BuiltInProviders(t *testing.T) {
 	r := NewRegistry()
 
 	names := r.List()
-	if len(names) != 4 {
-		t.Fatalf("expected 4 built-in providers, got %d: %v", len(names), names)
+	if len(names) != 7 {
+		t.Fatalf("expected 7 built-in providers, got %d: %v", len(names), names)
 	}
 
-	for _, name := range []string{"claude-code", "codex", "pi-agent", "opencode"} {
+	for _, name := range []string{"claude-code", "codex", "pi-agent", "opencode", "agy", "cursor", "kimi-code"} {
 		_, err := r.Get(name, nil)
 		if err == nil {
 			t.Errorf("expected stub error for %q, got nil", name)
@@ -118,9 +118,9 @@ func TestRegistry_List(t *testing.T) {
 
 	names := r.List()
 
-	// Must include the 4 built-ins + 2 custom = 6 total
-	if len(names) != 6 {
-		t.Fatalf("expected 6 names, got %d: %v", len(names), names)
+	// Must include the 7 built-ins + 2 custom = 9 total
+	if len(names) != 9 {
+		t.Fatalf("expected 9 names, got %d: %v", len(names), names)
 	}
 
 	// Must be sorted

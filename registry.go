@@ -39,6 +39,9 @@ func NewRegistry() *Registry {
 	r.entries[string(types.ProviderCodex)] = entry{factory: stub(string(types.ProviderCodex))}
 	r.entries[string(types.ProviderPiAgent)] = entry{factory: stub(string(types.ProviderPiAgent))}
 	r.entries[string(types.ProviderOpenCode)] = entry{factory: stub(string(types.ProviderOpenCode))}
+	r.entries[string(types.ProviderAgy)] = entry{factory: stub(string(types.ProviderAgy))}
+	r.entries[string(types.ProviderCursor)] = entry{factory: stub(string(types.ProviderCursor))}
+	r.entries[string(types.ProviderKimiCode)] = entry{factory: stub(string(types.ProviderKimiCode))}
 
 	return r
 }

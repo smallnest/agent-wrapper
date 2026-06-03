@@ -12,6 +12,9 @@ const (
 	ProviderCodex      Provider = "codex"
 	ProviderPiAgent    Provider = "pi-agent"
 	ProviderOpenCode   Provider = "opencode"
+	ProviderAgy        Provider = "agy"
+	ProviderCursor     Provider = "cursor"
+	ProviderKimiCode   Provider = "kimi-code"
 )
 
 // String 返回 provider 的字符串标识。
@@ -24,6 +27,9 @@ func AllProviders() []Provider {
 		ProviderCodex,
 		ProviderPiAgent,
 		ProviderOpenCode,
+		ProviderAgy,
+		ProviderCursor,
+		ProviderKimiCode,
 	}
 }
 

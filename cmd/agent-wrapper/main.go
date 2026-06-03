@@ -368,10 +368,7 @@ func parseRunFlags(args []string) *runFlags {
 		case "--json":
 			f.json = true
 		case "--stream":
-			i++
-			if i < len(args) {
-				f.stream = parseBool(args[i])
-			}
+			f.stream = true
 		case "--help", "-h":
 			printUsage()
 			os.Exit(0)
@@ -383,15 +380,6 @@ func parseRunFlags(args []string) *runFlags {
 		i++
 	}
 	return f
-}
-
-func parseBool(s string) bool {
-	switch strings.ToLower(s) {
-	case "true", "1", "yes", "on":
-		return true
-	default:
-		return false
-	}
 }
 
 func truncate(s string, max int) string {

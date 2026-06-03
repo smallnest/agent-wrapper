@@ -188,11 +188,17 @@ agent-wrapper 与 ACP 是互补关系，非竞争关系：
 | **审批/预算** | 不涉及 | Orchestrator 内置审批 handler + token 预算控制 |
 | **多 provider** | 需每个 agent 实现协议 | Registry 注册即可，4 个内置 provider + 自定义 |
 
-**关键区别：ACP 是一份协议，agent-wrapper 是一份实现。** ACP 说"你应该用这个 JSON 格式对话"，agent-wrapper 说"给我任意 agent CLI，我来跑、来容错、来治理"。两者可以组合使用——agent-wrapper 作为 ACP agent 的宿主运行时。
+### 为什么不用 ACP
 
-### 相关项目
+agent-wrapper 不采用 ACP 协议，而是直接驱动 agent CLI 子进程。ACP 在编辑器场景下有意义，但在工程集成场景下存在几个根本性问题：
 
-[acpx](https://acpx.sh/) 是 openclaw（Peter Steinberger）开发的 ACP 命令行客户端——通过 `npm install -g acpx` 安装后，可以在命令行直接与支持 ACP 协议的 agent 交互。agent-wrapper 与 acpx 是生态位置不同的工具：acpx 是 ACP 的**消费者**，解决"用 ACP 协议调 agent"，类似码农操作 agent 的遥控器；agent-wrapper 是 agent CLI 的**包装器**，解决"把任意 agent CLI 封成可治理的运行时"，侧重编排、容错、审批、预算。
+1. **功能不对齐**。Agent CLI 提供完整功能（`--output-format`、`--max-turns`、`--approve-all`、`--session-id` 等），ACP server 是重新实现的一层，通常只覆盖子集，很多 CLI flag 和输出格式在 ACP 层被丢弃或降级。
+
+2. **间接层伤害**。ACP 增加一重 JSON-RPC 包装——CLI 输出先被 ACP server 解析，再序列化为 ACP 事件，acpx 再消费。每多一层序列化/反序列化就慢一分，且中间层的 bug（事件丢失、字段静默丢弃、类型错误）对调用方不可见。
+
+3. **不适合嵌入项目**。ACP server 通常绑定编辑器生命周期，不是为嵌入到其他 Go 程序中调用的库。agent-wrapper 是一个 Go package，`go get` 后直接 `orch.Run`，零额外进程、零协议开销。
+
+agent-wrapper 的策略是 **"不协议化，直接包装"**——agent 的 CLI 就是 API。每个 agent 的子进程 stdout 直接打通到 `<-chan types.Event`，没有中间人。
 
 ## License
 

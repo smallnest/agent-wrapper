@@ -98,8 +98,14 @@ func main() {
 ```bash
 go build ./cmd/agent-wrapper
 
-# 运行 agent
+# 运行 agent（默认流式输出）
 ./agent-wrapper run --provider claude-code "解释这段代码"
+
+# JSON 聚合输出（适合脚本/CI）
+./agent-wrapper run --provider codex "修复 bug" --json
+
+# NDJSON 流式输出（适合管道处理）
+./agent-wrapper run --provider claude-code "hello" --json --stream | jq .
 
 # 自动审批 + 预算限制
 ./agent-wrapper run --provider codex "修复 bug" --approve-all --budget-tokens 5000
@@ -110,6 +116,14 @@ go build ./cmd/agent-wrapper
 # 查看版本
 ./agent-wrapper version
 ```
+
+### 输出格式
+
+| Flags | 模式 | 输出 |
+|-------|------|------|
+| (默认) | stream | 文本→stdout，元数据→stderr |
+| `--json` | aggregated JSON | `{"text":"...","usage":{...},"session_id":"..."}` |
+| `--json --stream` | stream-json (NDJSON) | 每行一个 Event JSON |
 
 ## 示例
 

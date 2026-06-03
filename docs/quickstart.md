@@ -42,12 +42,16 @@ func main() {
         NewMessage: func() *types.Message { m := types.NewUserMessage("你好"); return &m }(),
     })
 
-    // 5. 读取事件流
+    // 5. 读取事件流（也可用 RunSync 直接获取聚合结果）
     for evt := range events {
         if evt.Type == types.EventTextDelta {
             fmt.Print(evt.TextDelta)
         }
     }
+
+    // 或使用同步 API：
+    // result, _ := orch.RunSync(ctx, types.RunInput{...})
+    // fmt.Println(result.Text)
 }
 ```
 
@@ -57,8 +61,14 @@ func main() {
 # 构建
 go build ./cmd/agent-wrapper
 
-# 运行
+# 默认流式输出（文本→stdout，元数据→stderr）
 ./agent-wrapper run --provider claude-code "解释这段代码"
+
+# JSON 聚合输出（适合脚本/CI）
+./agent-wrapper run --provider claude-code "hello" --json
+
+# NDJSON 流式输出（适合管道处理）
+./agent-wrapper run --provider claude-code "hello" --json --stream | jq .
 
 # 查看可用 provider
 ./agent-wrapper list
@@ -69,6 +79,14 @@ go build ./cmd/agent-wrapper
 # 查看版本
 ./agent-wrapper version
 ```
+
+### 输出格式
+
+| Flags | 模式 | 描述 |
+|-------|------|------|
+| (默认) | stream | 文本增量输出到 stdout，工具调用/元数据到 stderr |
+| `--json` | aggregated JSON | 运行结束后输出单个 `{"text","usage","session_id"}` 对象 |
+| `--json --stream` | stream-json (NDJSON) | 每个事件序列化为一行 JSON，全部输出到 stdout |
 
 ## 前置条件
 

@@ -128,6 +128,9 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 	}
 
 	args := []string{"-p", input.Prompt, "--output-format", "stream-json", "--verbose"}
+	if input.SessionID != "" {
+		args = append(args, "--resume", input.SessionID)
+	}
 	if a.opts.Model != "" {
 		args = append(args, "--model", a.opts.Model)
 	}

@@ -137,6 +137,9 @@ func (a *OpenCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan t
 	}
 
 	args := []string{"run", input.Prompt, "--format", "json"}
+	if input.SessionID != "" {
+		args = append(args, "--session", input.SessionID)
+	}
 	if a.opts.Model != "" {
 		args = append(args, "-m", a.opts.Model)
 	}

@@ -124,6 +124,9 @@ func (a *CodexAgent) Run(ctx context.Context, input types.RunInput) (<-chan type
 	}
 
 	args := []string{"exec", input.Prompt, "--json"}
+	if input.SessionID != "" {
+		args = append(args, "--resume", input.SessionID)
+	}
 	if a.opts.Model != "" {
 		args = append(args, "--model", a.opts.Model)
 	}

@@ -154,7 +154,12 @@ func (a *PiAgent) Run(ctx context.Context, input types.RunInput) (<-chan types.E
 		return nil, fmt.Errorf("pi: no prompt provided")
 	}
 
-	args := []string{"-p", input.Prompt, "--mode", "json", "--no-session"}
+	args := []string{"-p", input.Prompt, "--mode", "json"}
+	if input.SessionID != "" {
+		args = append(args, "--session-id", input.SessionID)
+	} else {
+		args = append(args, "--no-session")
+	}
 	if a.opts.Model != "" {
 		args = append(args, "--model", a.opts.Model)
 	}

@@ -122,7 +122,6 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 		return nil, err
 	}
 
-	// Use Prompt from RunInput.
 	if input.Prompt == "" {
 		return nil, fmt.Errorf("claude: no prompt provided")
 	}
@@ -158,6 +157,7 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 		defer func() { _ = proc.Close() }()
 
 		scanner := process.NewJSONRPCScanner(proc.Stdout())
+		var sid string
 
 		for scanner.Scan() {
 			frame := scanner.Frame()
@@ -165,6 +165,11 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 			if !ok {
 				continue
 			}
+			if evt.SessionID != "" {
+				sid = evt.SessionID
+				continue
+			}
+			evt.SessionID = sid
 			select {
 			case events <- evt:
 			case <-ctx.Done():
@@ -182,7 +187,6 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 			default:
 			}
 		}
-		// Check if subprocess exited with stderr indicating context-length error.
 		if ec := proc.Wait(); ec != 0 {
 			if stderr := proc.Stderr(); stderr != "" {
 				wrapped := agentwrapper.WrapIfContextExceeded(fmt.Errorf("exit %d: %s", ec, stderr), stderr)
@@ -206,6 +210,8 @@ func parseClaudeEvent(data []byte) (types.Event, bool) {
 	}
 
 	switch raw.Type {
+	case "system":
+		return types.Event{SessionID: raw.SessionID}, true
 	case "assistant":
 		if raw.Message == nil {
 			return types.Event{}, false
@@ -252,4 +258,3 @@ func parseClaudeEvent(data []byte) (types.Event, bool) {
 
 	return types.Event{}, false
 }
-

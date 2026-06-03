@@ -117,6 +117,9 @@ type Event struct {
 
 	// Error: 运行中发生错误
 	Error error `json:"error,omitempty"`
+
+	// SessionID: agent runtime 返回的会话 ID（可存储用于后续恢复）
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // TokenUsage 表示一次 LLM 调用的 token 用量。

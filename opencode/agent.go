@@ -212,13 +212,12 @@ func parseOpenCodeEvent(data []byte) (types.Event, bool) {
 		return types.Event{}, false
 	}
 
+	sid := raw.SessionID
+
 	switch raw.Type {
 	case "content_delta":
 		if raw.Content != "" {
-			return types.Event{
-				Type:      types.EventTextDelta,
-				TextDelta: raw.Content,
-			}, true
+			return types.Event{Type: types.EventTextDelta, TextDelta: raw.Content, SessionID: sid}, true
 		}
 
 	case "tool_use_start":
@@ -227,23 +226,14 @@ func parseOpenCodeEvent(data []byte) (types.Event, bool) {
 			if raw.ToolCall.Input != "" {
 				input = json.RawMessage(raw.ToolCall.Input)
 			}
-			return types.Event{
-				Type:       types.EventToolCall,
-				ToolCallID: raw.ToolCall.ID,
-				ToolName:   raw.ToolCall.Name,
-				ToolInput:  input,
-			}, true
+			return types.Event{Type: types.EventToolCall, ToolCallID: raw.ToolCall.ID, ToolName: raw.ToolCall.Name, ToolInput: input, SessionID: sid}, true
 		}
 
 	case "tool_use_stop":
-		// Tool call completed — we already emitted at tool_use_start
 		return types.Event{}, false
 
 	case "complete":
-		evt := types.Event{
-			Type:       types.EventTurnEnd,
-			StopReason: "end_turn",
-		}
+		evt := types.Event{Type: types.EventTurnEnd, StopReason: "end_turn", SessionID: sid}
 		if raw.Response != nil {
 			switch raw.Response.FinishReason {
 			case "tool_use":
@@ -268,10 +258,7 @@ func parseOpenCodeEvent(data []byte) (types.Event, bool) {
 		if raw.Error != nil {
 			msg = raw.Error.Message
 		}
-		return types.Event{
-			Type:  types.EventError,
-			Error: fmt.Errorf("opencode: %s", msg),
-		}, true
+		return types.Event{Type: types.EventError, Error: fmt.Errorf("opencode: %s", msg), SessionID: sid}, true
 	}
 
 	return types.Event{}, false

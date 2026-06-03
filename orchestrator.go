@@ -172,8 +172,12 @@ func (o *Orchestrator) RunSync(ctx context.Context, input types.RunInput) (*type
 
 	var text string
 	var usage *types.TokenUsage
+	var sessionID string
 
 	for evt := range eventCh {
+		if evt.SessionID != "" {
+			sessionID = evt.SessionID
+		}
 		switch evt.Type {
 		case types.EventTextDelta:
 			text += evt.TextDelta
@@ -187,11 +191,14 @@ func (o *Orchestrator) RunSync(ctx context.Context, input types.RunInput) (*type
 			}
 		}
 	}
+	if sessionID == "" {
+		sessionID = input.SessionID
+	}
 
 	return &types.RunResult{
 		Text:      text,
 		Usage:     usage,
-		SessionID: input.SessionID,
+		SessionID: sessionID,
 	}, nil
 }
 

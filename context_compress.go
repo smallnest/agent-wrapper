@@ -50,6 +50,26 @@ func IsContextLengthExceeded(err error) bool {
 	return false
 }
 
+// WrapIfContextExceeded wraps err in a ContextLengthExceededError if the error
+// or stderr output matches a context-length pattern. If err is already a
+// *ContextLengthExceededError, it is returned unchanged.
+func WrapIfContextExceeded(err error, stderr string) error {
+	if err == nil {
+		return nil
+	}
+	var ce *ContextLengthExceededError
+	if errors.As(err, &ce) {
+		return err
+	}
+	if IsContextLengthExceeded(err) {
+		return &ContextLengthExceededError{Err: err}
+	}
+	if stderr != "" && IsContextLengthExceeded(errors.New(stderr)) {
+		return &ContextLengthExceededError{Err: err}
+	}
+	return err
+}
+
 // ContextCompressor compresses message history to reduce token usage.
 type ContextCompressor interface {
 	Compress(messages []types.Message) []types.Message

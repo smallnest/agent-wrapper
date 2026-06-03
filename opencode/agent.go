@@ -185,9 +185,22 @@ func (a *OpenCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan t
 			}
 		}
 		if err := scanner.Err(); err != nil {
+			wrapped := agentwrapper.WrapIfContextExceeded(err, proc.Stderr())
 			select {
-			case events <- types.Event{Type: types.EventError, Error: err}:
+			case events <- types.Event{Type: types.EventError, Error: wrapped}:
 			default:
+			}
+		}
+		// Check if subprocess exited with stderr indicating context-length error.
+		if ec := proc.Wait(); ec != 0 {
+			if stderr := proc.Stderr(); stderr != "" {
+				wrapped := agentwrapper.WrapIfContextExceeded(fmt.Errorf("exit %d: %s", ec, stderr), stderr)
+				if _, ok := wrapped.(*agentwrapper.ContextLengthExceededError); ok {
+					select {
+					case events <- types.Event{Type: types.EventError, Error: wrapped}:
+					default:
+					}
+				}
 			}
 		}
 	}()

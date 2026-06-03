@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"time"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
 	"github.com/smallnest/agent-wrapper/claude"
 	"github.com/smallnest/agent-wrapper/codex"
 	"github.com/smallnest/agent-wrapper/opencode"
 	"github.com/smallnest/agent-wrapper/pi"
-	"github.com/smallnest/agent-wrapper/sessionstore/memory"
 	"github.com/smallnest/agent-wrapper/types"
 	"github.com/spf13/pflag"
 )
@@ -31,8 +29,6 @@ func main() {
 		cmdRun(os.Args[2:])
 	case "list":
 		cmdList()
-	case "sessions":
-		cmdSessions()
 	case "version":
 		cmdVersion()
 	case "help", "--help", "-h":
@@ -53,7 +49,6 @@ Usage:
 Commands:
   run       Start an agent turn
   list      List registered providers
-  sessions  List all sessions
   version   Show version
 
 Run flags:
@@ -64,7 +59,6 @@ Run flags:
   --system-prompt-file PATH  Read system prompt from file
   --approve-all              Auto-approve all tool calls
   --budget-tokens N          Token budget limit
-  --session-id UUID          Resume an existing session
   --binary-path PATH         Override agent CLI binary path
   --json                     Output in JSON format (with --stream: NDJSON; without: single object)
   --stream                   Stream output (default true; set --stream=false to disable)
@@ -75,7 +69,6 @@ Examples:
   agent-wrapper run --provider claude-code --json "hello"        # single JSON object
   agent-wrapper run --provider claude-code --json --stream "hi"  # NDJSON stream
   agent-wrapper list
-  agent-wrapper sessions
   agent-wrapper version`)
 }
 
@@ -120,46 +113,6 @@ func cmdRun(args []string) {
 		os.Exit(1)
 	}
 
-	// Set up session store.
-	store := memory.New()
-
-	var session *types.Session
-	if flags.sessionID != "" {
-		session, err = store.Get(flags.sessionID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: session not found: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		session, err = store.Create()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: create session: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	// Build orchestrator options.
-	var orchOpts []agentwrapper.OrchestratorOption
-	if flags.approveAll {
-		orchOpts = append(orchOpts, agentwrapper.WithApprovalHandler(
-			func(ctx context.Context, call agentwrapper.ToolCall) (*agentwrapper.Decision, error) {
-				return &agentwrapper.Decision{Action: agentwrapper.ActionAllow}, nil
-			},
-		))
-	}
-	if flags.budgetTokens > 0 {
-		orchOpts = append(orchOpts, agentwrapper.WithBudgetHandler(
-			func(ctx context.Context, usage types.TokenUsage) error {
-				if usage.TotalTokens > flags.budgetTokens {
-					return fmt.Errorf("budget exceeded: used %d of %d tokens", usage.TotalTokens, flags.budgetTokens)
-				}
-				return nil
-			},
-		))
-	}
-
-	orch := agentwrapper.NewOrchestrator(agent, store, orchOpts...)
-
 	// Read system prompt from file if specified.
 	var systemPrompt string
 	if flags.systemPromptFile != "" {
@@ -186,7 +139,6 @@ func cmdRun(args []string) {
 		maxTurns = 10
 	}
 
-	// Determine output format from flags.
 	outputFormat := types.OutputStream
 	if flags.json {
 		if flags.stream {
@@ -195,6 +147,9 @@ func cmdRun(args []string) {
 			outputFormat = types.OutputJSON
 		}
 	}
+
+	session := types.NewSession()
+	orch := agentwrapper.NewOrchestrator(agent, nil)
 
 	input := types.RunInput{
 		Session:      session,
@@ -233,8 +188,6 @@ func cmdRun(args []string) {
 			os.Exit(1)
 		}
 
-		fmt.Fprintf(os.Stderr, "session: %s\n", session.ID)
-
 		for evt := range events {
 			switch evt.Type {
 			case types.EventTextDelta:
@@ -248,7 +201,6 @@ func cmdRun(args []string) {
 				}
 				fmt.Fprintf(os.Stderr, "%s %s\n", prefix, truncate(evt.ToolResultOutput, 200))
 			case types.EventTurnEnd:
-				fmt.Fprintln(os.Stderr)
 				if evt.TokenUsage != nil {
 					fmt.Fprintf(os.Stderr, "[tokens] in=%d out=%d total=%d\n",
 						evt.TokenUsage.InputTokens, evt.TokenUsage.OutputTokens, evt.TokenUsage.TotalTokens)
@@ -257,8 +209,6 @@ func cmdRun(args []string) {
 				fmt.Fprintf(os.Stderr, "[error] %v\n", evt.Error)
 			}
 		}
-
-		fmt.Fprintln(os.Stderr)
 	}
 }
 
@@ -284,21 +234,6 @@ func cmdList() {
 	}
 }
 
-func cmdSessions() {
-	store := memory.New()
-	summaries := store.List()
-	if len(summaries) == 0 {
-		fmt.Println("No sessions.")
-		return
-	}
-	fmt.Printf("%-38s  %-6s  %-20s  %-20s\n", "ID", "MSGS", "CREATED", "UPDATED")
-	for _, s := range summaries {
-		fmt.Printf("%-38s  %-6d  %-20s  %-20s\n",
-			s.ID, s.MessageCount,
-			s.CreatedAt.Format(time.DateTime), s.UpdatedAt.Format(time.DateTime))
-	}
-}
-
 func cmdVersion() {
 	fmt.Printf("agent-wrapper %s\n", version)
 }
@@ -311,7 +246,6 @@ type runFlags struct {
 	systemPromptFile string
 	approveAll       bool
 	budgetTokens     int
-	sessionID        string
 	binaryPath       string
 	json             bool
 	stream           bool
@@ -321,6 +255,7 @@ type runFlags struct {
 func parseRunFlags(args []string) *runFlags {
 	f := &runFlags{}
 	fs := pflag.NewFlagSet("run", pflag.ContinueOnError)
+	fs.SetInterspersed(true)
 	fs.StringVar(&f.provider, "provider", "", "Provider: claude-code|codex|pi-agent|opencode")
 	fs.StringVar(&f.model, "model", "", "Model name")
 	fs.IntVar(&f.maxTurns, "max-turns", 0, "Maximum turns")
@@ -328,13 +263,11 @@ func parseRunFlags(args []string) *runFlags {
 	fs.StringVar(&f.systemPromptFile, "system-prompt-file", "", "Read system prompt from file")
 	fs.BoolVar(&f.approveAll, "approve-all", false, "Auto-approve all tool calls")
 	fs.IntVar(&f.budgetTokens, "budget-tokens", 0, "Token budget limit")
-	fs.StringVar(&f.sessionID, "session-id", "", "Resume an existing session")
 	fs.StringVar(&f.binaryPath, "binary-path", "", "Override agent CLI binary path")
 	fs.BoolVar(&f.json, "json", false, "Output in JSON format")
 	fs.BoolVar(&f.stream, "stream", true, "Stream output (set --stream=false to disable)")
 	_ = fs.Parse(args)
 
-	// Positional argument = message.
 	remaining := fs.Args()
 	if len(remaining) > 0 {
 		f.message = remaining[0]

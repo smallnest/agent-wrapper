@@ -28,8 +28,3 @@ func newScanner(r io.Reader) *bufio.Scanner {
 func NewJSONRPCScanner(r io.Reader) FrameScanner {
 	return newJSONRPCScanner(r)
 }
-
-// NewSSEScanner creates an SSE (text/event-stream) scanner.
-func NewSSEScanner(r io.Reader) FrameScanner {
-	return newSSEScanner(r)
-}

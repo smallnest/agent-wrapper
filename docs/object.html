@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Wrapper 对象图</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist', sans-serif; background: #faf6f0; min-height: 100vh; padding: 2.5rem 2rem; color: #1c1917; }
+    .container { max-width: 960px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #78716c; margin-bottom: 0.375rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 1.75rem; font-weight: 400; color: #1c1917; }
+    .subtitle { color: #78716c; font-size: 0.8125rem; margin-top: 0.375rem; }
+    .diagram-desc { color: #a8a29e; font-size: 0.6875rem; margin-top: 0.5rem; line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #f0ebe3; border: 1px solid rgba(28,25,23,0.12); border-radius: 8px; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 780px; display: block; }
+    .cards { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid rgba(28,25,23,0.12); border-radius: 6px; padding: 1.25rem; }
+    .card-eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.625rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #a8a29e; margin-bottom: 0.5rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.ink { background: #1c1917; }
+    .card-dot.accent { background: #d97706; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1c1917; }
+    .card ul { list-style: none; color: #78716c; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(28,25,23,0.08); text-align: center; font-family: 'Geist Mono', monospace; color: #a8a29e; font-size: 0.625rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="eyebrow">STRUCTURAL DIAGRAM</div>
+    <h1>Agent Wrapper 对象图</h1>
+    <div class="subtitle">典型运行时场景：Claude Code 调用流程</div>
+    <div class="diagram-desc">展示调用方通过 Orchestrator 执行 "解释这段代码" 时的对象实例及其属性值快照。</div>
+  </div>
+
+  <div class="diagram-container">
+    <svg viewBox="0 0 860 620" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#78716c"/></marker>
+      </defs>
+
+      <!-- orch : Orchestrator -->
+      <rect x="290" y="30" width="300" height="115" rx="4" fill="#ffffff" stroke="#1c1917" stroke-width="1.5"/>
+      <rect x="290" y="30" width="300" height="22" rx="4" fill="#78716c"/>
+      <text x="440" y="45" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#ffffff" font-weight="600">orch : Orchestrator</text>
+      <text x="306" y="66" font-family="Geist Mono" font-size="9" fill="#78716c">agent = &amp;ClaudeCodeAgent{...}</text>
+      <text x="306" y="81" font-family="Geist Mono" font-size="9" fill="#78716c">maxRetries = 3</text>
+      <text x="306" y="96" font-family="Geist Mono" font-size="9" fill="#78716c">compressor = ChainedCompressor{</text>
+      <text x="306" y="111" font-family="Geist Mono" font-size="9" fill="#78716c">  SlidingWindow(20), Summary(20)}</text>
+      <text x="306" y="126" font-family="Geist Mono" font-size="9" fill="#a8a29e">approval = nil  budget = nil</text>
+
+      <!-- agent : ClaudeCodeAgent -->
+      <rect x="290" y="200" width="300" height="85" rx="4" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+      <rect x="290" y="200" width="300" height="22" rx="4" fill="#d97706"/>
+      <text x="440" y="215" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#ffffff" font-weight="600">agent : ClaudeCodeAgent</text>
+      <text x="306" y="236" font-family="Geist Mono" font-size="9" fill="#78716c">opts = Options{Model: "", BinaryPath: ""}</text>
+      <text x="306" y="251" font-family="Geist Mono" font-size="9" fill="#78716c">binary = "/usr/local/bin/claude"</text>
+      <text x="306" y="266" font-family="Geist Mono" font-size="9" fill="#a8a29e">once = sync.Once{}</text>
+
+      <!-- input : RunInput -->
+      <rect x="30" y="340" width="250" height="85" rx="4" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <rect x="30" y="340" width="250" height="22" rx="4" fill="#F5F5F1"/>
+      <text x="155" y="355" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917" font-weight="600">input : RunInput</text>
+      <text x="46" y="376" font-family="Geist Mono" font-size="9" fill="#78716c">Prompt = "解释这段代码"</text>
+      <text x="46" y="391" font-family="Geist Mono" font-size="9" fill="#78716c">SessionID = ""</text>
+      <text x="46" y="406" font-family="Geist Mono" font-size="9" fill="#a8a29e">MaxTurns = 10, OutputFormat = ""</text>
+
+      <!-- evt : Event -->
+      <rect x="360" y="340" width="220" height="85" rx="4" fill="#ffffff" stroke="#78716c" stroke-width="1.2"/>
+      <rect x="360" y="340" width="220" height="22" rx="4" fill="#F5F5F1"/>
+      <text x="470" y="355" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917" font-weight="600">evt : Event</text>
+      <text x="376" y="376" font-family="Geist Mono" font-size="9" fill="#78716c">Type = "text_delta"</text>
+      <text x="376" y="391" font-family="Geist Mono" font-size="9" fill="#78716c">TextDelta = "这段代码..."</text>
+      <text x="376" y="406" font-family="Geist Mono" font-size="9" fill="#a8a29e">SessionID = "abc-123..."</text>
+
+      <!-- proc : AgentProcess -->
+      <rect x="310" y="470" width="260" height="70" rx="4" fill="#ffffff" stroke="#1c1917" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <rect x="310" y="470" width="260" height="22" rx="4" fill="#F5F5F1"/>
+      <text x="440" y="485" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917" font-weight="600">proc : AgentProcess</text>
+      <text x="326" y="506" font-family="Geist Mono" font-size="9" fill="#78716c">cmd = exec.Cmd{Path: "/usr/local/bin/claude"}</text>
+      <text x="326" y="524" font-family="Geist Mono" font-size="9" fill="#a8a29e">exited = false  exitCode = 0</text>
+
+      <!-- Links -->
+      <line x1="440" y1="145" x2="440" y2="200" stroke="#78716c" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="460" y="176" font-family="Geist Mono" font-size="7" fill="#a8a29e">agent</text>
+
+      <line x1="155" y1="340" x2="290" y2="100" stroke="#78716c" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+      <text x="180" y="210" font-family="Geist Mono" font-size="7" fill="#a8a29e">Run(input)</text>
+
+      <line x1="440" y1="340" x2="440" y2="145" stroke="#78716c" stroke-width="1" stroke-dasharray="4 3"/>
+
+      <line x1="440" y1="285" x2="440" y2="470" stroke="#78716c" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="460" y="382" font-family="Geist Mono" font-size="7" fill="#a8a29e">subprocess</text>
+
+      <!-- Legend -->
+      <rect x="650" y="30" width="180" height="120" rx="4" fill="#ffffff" stroke="rgba(28,25,23,0.1)" stroke-width="1"/>
+      <text x="740" y="52" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">LEGEND</text>
+      <line x1="662" y1="64" x2="740" y2="768" stroke="#1c1917" stroke-width="1"/>
+      <text x="676" y="82" font-family="Geist Mono" font-size="7" fill="#78716c">── 实线框: 具体实例</text>
+      <line x1="662" y1="94" x2="698" y2="94" stroke="#78716c" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="676" y="106" font-family="Geist Mono" font-size="7" fill="#78716c">- - 虚线: 底层对象</text>
+      <rect x="664" y="118" width="12" height="8" rx="2" fill="#d97706" opacity="0.4"/>
+      <text x="676" y="132" font-family="Geist Mono" font-size="7" fill="#78716c">橙色: Provider 实例</text>
+    </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-eyebrow">RUNTIME SNAPSHOT</div>
+      <div class="card-header"><div class="card-dot ink"></div><h3>对象实例</h3></div>
+      <ul><li>orch — Orchestrator 的核心编排实例</li><li>agent — ClaudeCodeAgent 具体实现</li><li>input — 单次调用的参数载体</li><li>evt — 流式输出的单个事件</li><li>proc — 底层 CLI 子进程</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-eyebrow">RELATIONS</div>
+      <div class="card-header"><div class="card-dot accent"></div><h3>对象链接</h3></div>
+      <ul><li>orch 持有 agent 引用（组合）</li><li>agent.Run() 创建 proc 子进程</li><li>input → orch.Run() 参数传入</li><li>事件流 → evt 逐个推送</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">Agent Wrapper · Object Diagram · 2026</div>
+</div>
+</body>
+</html>

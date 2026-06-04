@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Wrapper 用例图</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist', sans-serif; background: #faf6f0; min-height: 100vh; padding: 2.5rem 2rem; color: #1c1917; }
+    .container { max-width: 960px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #78716c; margin-bottom: 0.375rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 1.75rem; font-weight: 400; color: #1c1917; }
+    .subtitle { color: #78716c; font-size: 0.8125rem; margin-top: 0.375rem; }
+    .diagram-desc { color: #a8a29e; font-size: 0.6875rem; margin-top: 0.5rem; line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #f0ebe3; border: 1px solid rgba(28,25,23,0.12); border-radius: 8px; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 720px; display: block; }
+    .cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid rgba(28,25,23,0.12); border-radius: 6px; padding: 1.25rem; }
+    .card-eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.625rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #a8a29e; margin-bottom: 0.5rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.ink { background: #1c1917; }
+    .card-dot.accent { background: #d97706; }
+    .card-dot.muted { background: #78716c; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1c1917; }
+    .card ul { list-style: none; color: #78716c; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(28,25,23,0.08); text-align: center; font-family: 'Geist Mono', monospace; color: #a8a29e; font-size: 0.625rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="eyebrow">BEHAVIORAL DIAGRAM</div>
+    <h1>Agent Wrapper 用例图</h1>
+    <div class="subtitle">用户视角：Agent 调用场景与功能用例</div>
+    <div class="diagram-desc">展示 Go 开发者、CLI 用户、CI/CD 系统三类参与者与 agent-wrapper 的交互边界。</div>
+  </div>
+
+  <div class="diagram-container">
+    <svg viewBox="0 0 760 570" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#78716c"/></marker>
+      </defs>
+
+      <!-- System Boundary -->
+      <rect x="260" y="20" width="480" height="530" rx="12" fill="#faf7f2" stroke="#1c1917" stroke-width="1.5" stroke-dasharray="10 5"/>
+      <text x="500" y="48" text-anchor="middle" font-family="Geist Mono" font-size="11" font-weight="600" fill="#1c1917">Agent Wrapper System</text>
+
+      <!-- Actors -->
+      <!-- Go Developer -->
+      <line x1="80" y1="100" x2="80" y2="180" stroke="#78716c" stroke-width="1"/>
+      <circle cx="80" cy="82" r="14" fill="#faf7f2" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="80" y="200" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917" font-weight="600">Go Developer</text>
+      <text x="80" y="218" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">(import library)</text>
+
+      <!-- CLI User -->
+      <line x1="80" y1="320" x2="80" y2="400" stroke="#78716c" stroke-width="1"/>
+      <circle cx="80" cy="302" r="14" fill="#faf7f2" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="80" y="420" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917" font-weight="600">CLI User</text>
+      <text x="80" y="438" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">(shell / script)</text>
+
+      <!-- CI/CD -->
+      <line x1="80" y1="500" x2="80" y2="555" stroke="#78716c" stroke-width="1"/>
+      <circle cx="80" cy="482" r="14" fill="#faf7f2" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="80" y="577" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917" font-weight="600">CI/CD Runner</text>
+      <text x="80" y="593" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">(automated)</text>
+
+      <!-- Use cases -->
+      <!-- UC1 -->
+      <ellipse cx="480" cy="90" rx="120" ry="32" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+      <text x="480" y="87" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917">Stream Events</text>
+      <text x="480" y="102" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">orch.Run() → chan Event</text>
+
+      <line x1="94" y1="180" x2="360" y2="90" stroke="#1c1917" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- UC2 -->
+      <ellipse cx="480" cy="170" rx="120" ry="32" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+      <text x="480" y="167" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917">Sync Run</text>
+      <text x="480" y="182" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">orch.RunSync() → RunResult</text>
+
+      <line x1="94" y1="180" x2="360" y2="170" stroke="#1c1917" stroke-width="1" stroke-dasharray="4 3"/>
+
+      <!-- UC3 -->
+      <ellipse cx="480" cy="255" rx="140" ry="32" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+      <text x="480" y="252" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917">Resume Session</text>
+      <text x="480" y="267" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">SessionID → continue</text>
+
+      <!-- UC4 -->
+      <ellipse cx="480" cy="335" rx="140" ry="32" fill="#ffffff" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="480" y="332" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917">tool approval</text>
+      <text x="480" y="347" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">allow/deny/abort tool calls</text>
+
+      <!-- UC5 -->
+      <ellipse cx="480" cy="415" rx="140" ry="32" fill="#ffffff" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="480" y="412" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917">Token Budget Control</text>
+      <text x="480" y="427" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">cap token consumption</text>
+
+      <!-- UC6 -->
+      <ellipse cx="480" cy="495" rx="150" ry="32" fill="#ffffff" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="480" y="492" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#1c1917">Context Compression</text>
+      <text x="480" y="507" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">auto-compress on overflow</text>
+
+      <!-- Connections -->
+      <line x1="94" y1="400" x2="340" y2="335" stroke="#1c1917" stroke-width="1" marker-end="url(#arrow)"/>
+      <line x1="94" y1="400" x2="340" y2="415" stroke="#1c1917" stroke-width="1" marker-end="url(#arrow)"/>
+      <line x1="94" y1="555" x2="330" y2="495" stroke="#1c1917" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- UC7: Register Custom Provider -->
+      <ellipse cx="480" cy="560" rx="150" ry="28" fill="#ffffff" stroke="#1c1917" stroke-width="1.2" stroke-dasharray="6 3"/>
+      <text x="480" y="557" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#78716c">Register Custom Provider</text>
+      <text x="480" y="570" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#a8a29e">registry.Register(name, factory)</text>
+
+      <line x1="94" y1="555" x2="330" y2="560" stroke="#1c1917" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- Relationships: include / extend -->
+      <!-- Stream Events includes Sync Run (conceptual) -->
+      <line x1="600" y1="120" x2="600" y2="138" stroke="#78716c" stroke-width="0.8" stroke-dasharray="4 3"/>
+      <text x="615" y="132" font-family="Geist Mono" font-size="6" fill="#a8a29e">«include»</text>
+
+      <!-- tool approval extend Stream Events -->
+      <line x1="600" y1="335" x2="600" y2="122" stroke="#78716c" stroke-width="0.8" stroke-dasharray="4 3"/>
+      <text x="615" y="230" font-family="Geist Mono" font-size="6" fill="#a8a29e">«extend»</text>
+    </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-eyebrow">ACTORS</div>
+      <div class="card-header"><div class="card-dot ink"></div><h3>参与者</h3></div>
+      <ul><li>Go Developer — 通过 import 库集成</li><li>CLI User — 通过 agent-wrapper 命令行</li><li>CI/CD Runner — 自动化脚本/流水线</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-eyebrow">PRIMARY USE CASES</div>
+      <div class="card-header"><div class="card-dot accent"></div><h3>主要用例</h3></div>
+      <ul><li>Stream Events — 异步消费事件流</li><li>Sync Run — 同步获取聚合结果</li><li>Resume Session — 会话恢复</li><li>Register Custom Provider — 扩展新 Agent</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-eyebrow">SUPPORTING USE CASES</div>
+      <div class="card-header"><div class="card-dot muted"></div><h3>辅助用例</h3></div>
+      <ul><li>tool approval — 扩展 Stream Events</li><li>Token Budget Control — 限制资源消耗</li><li>Context Compression — 自动处理溢出</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">Agent Wrapper · Use Case Diagram · 2026</div>
+</div>
+</body>
+</html>

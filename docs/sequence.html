@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Wrapper 序列图</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist', sans-serif; background: #faf6f0; min-height: 100vh; padding: 2.5rem 2rem; color: #1c1917; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #78716c; margin-bottom: 0.375rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 1.75rem; font-weight: 400; color: #1c1917; }
+    .subtitle { color: #78716c; font-size: 0.8125rem; margin-top: 0.375rem; }
+    .diagram-desc { color: #a8a29e; font-size: 0.6875rem; margin-top: 0.5rem; line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #f0ebe3; border: 1px solid rgba(28,25,23,0.12); border-radius: 8px; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid rgba(28,25,23,0.12); border-radius: 6px; padding: 1.25rem; }
+    .card-eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.625rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #a8a29e; margin-bottom: 0.5rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.ink { background: #1c1917; }
+    .card-dot.accent { background: #d97706; }
+    .card-dot.muted { background: #78716c; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1c1917; }
+    .card ul { list-style: none; color: #78716c; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(28,25,23,0.08); text-align: center; font-family: 'Geist Mono', monospace; color: #a8a29e; font-size: 0.625rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="eyebrow">BEHAVIORAL DIAGRAM</div>
+    <h1>Agent Wrapper 序列图</h1>
+    <div class="subtitle">典型运行时调用：orch.Run() 完整消息序列</div>
+    <div class="diagram-desc">展示 Go 调用方 → Orchestrator → ClaudeCodeAgent → 子进程 → Agent CLI 之间的消息交互时序。</div>
+  </div>
+
+  <div class="diagram-container">
+    <svg viewBox="0 0 1050 680" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow-sync" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#1c1917"/></marker>
+        <marker id="arrow-async" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#78716c"/></marker>
+        <marker id="arrow-return" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a8a29e"/></marker>
+      </defs>
+
+      <!-- Lifelines -->
+      <rect x="50" y="40" width="130" height="30" rx="6" fill="#1c1917"/>
+      <text x="115" y="60" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#ffffff" font-weight="600">Caller (Go)</text>
+      <line x1="115" y1="70" x2="115" y2="650" stroke="#1c1917" stroke-width="1" stroke-dasharray="6 4"/>
+
+      <rect x="260" y="40" width="130" height="30" rx="6" fill="#1c1917"/>
+      <text x="325" y="60" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#ffffff" font-weight="600">Orchestrator</text>
+      <line x1="325" y1="70" x2="325" y2="650" stroke="#1c1917" stroke-width="1" stroke-dasharray="6 4"/>
+
+      <rect x="470" y="40" width="160" height="30" rx="6" fill="#d97706"/>
+      <text x="550" y="60" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#ffffff" font-weight="600">ClaudeCodeAgent</text>
+      <line x1="550" y1="70" x2="550" y2="650" stroke="#d97706" stroke-width="1" stroke-dasharray="6 4"/>
+
+      <rect x="720" y="40" width="130" height="30" rx="6" fill="#1c1917"/>
+      <text x="785" y="60" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#ffffff" font-weight="600">AgentProcess</text>
+      <line x1="785" y1="70" x2="785" y2="650" stroke="#1c1917" stroke-width="1" stroke-dasharray="6 4"/>
+
+      <rect x="890" y="40" width="130" height="30" rx="6" fill="#a8a29e"/>
+      <text x="955" y="60" text-anchor="middle" font-family="Geist Mono" font-size="9" fill="#ffffff" font-weight="600">Agent CLI</text>
+      <line x1="955" y1="70" x2="955" y2="650" stroke="#a8a29e" stroke-width="1" stroke-dasharray="6 4"/>
+
+      <!-- 1. orch.Run(input) -->
+      <line x1="115" y1="110" x2="315" y2="110" stroke="#1c1917" stroke-width="1.5" marker-end="url(#arrow-sync)"/>
+      <text x="215" y="103" font-family="Geist Mono" font-size="8" fill="#1c1917" font-weight="500">1: orch.Run(input)</text>
+
+      <!-- 2. validate input -->
+      <rect x="330" y="130" width="15" height="15" rx="2" fill="#78716c" opacity="0.5"/>
+      <text x="355" y="142" font-family="Geist Mono" font-size="7" fill="#78716c">2: validate Prompt != ""</text>
+
+      <!-- 3. runAgentWithRetry -->
+      <line x1="325" y1="180" x2="540" y2="180" stroke="#1c1917" stroke-width="1.2" marker-end="url(#arrow-sync)"/>
+      <text x="432" y="173" font-family="Geist Mono" font-size="8" fill="#1c1917">3: agent.Run(input)</text>
+
+      <!-- 4. resolveBinary -->
+      <rect x="555" y="200" width="15" height="15" rx="2" fill="#78716c" opacity="0.5"/>
+      <text x="580" y="212" font-family="Geist Mono" font-size="7" fill="#78716c">4: resolveBinary()</text>
+
+      <!-- 5. Build args -->
+      <rect x="555" y="230" width="15" height="15" rx="2" fill="#78716c" opacity="0.5"/>
+      <text x="580" y="242" font-family="Geist Mono" font-size="7" fill="#78716c">5: args = [-p, prompt, --output-format, stream-json]</text>
+
+      <!-- 6. StartProcess -->
+      <line x1="550" y1="275" x2="775" y2="275" stroke="#1c1917" stroke-width="1.2" marker-end="url(#arrow-sync)"/>
+      <text x="662" y="268" font-family="Geist Mono" font-size="8" fill="#1c1917">6: StartProcess(ctx, cfg)</text>
+
+      <!-- 7. cmd.Start() -->
+      <line x1="785" y1="300" x2="945" y2="300" stroke="#1c1917" stroke-width="1.2" marker-end="url(#arrow-sync)"/>
+      <text x="865" y="293" font-family="Geist Mono" font-size="8" fill="#1c1917">7: cmd.Start()</text>
+
+      <!-- 8. stdin write (optional) -->
+      <line x1="785" y1="330" x2="945" y2="330" stroke="#78716c" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow-async)"/>
+      <text x="865" y="323" font-family="Geist Mono" font-size="7" fill="#78716c">8: stdin ← prompt</text>
+
+      <!-- 9. return chan Event -->
+      <line x1="550" y1="360" x2="335" y2="360" stroke="#a8a29e" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow-return)"/>
+      <text x="442" y="353" font-family="Geist Mono" font-size="7" fill="#a8a29e">9: return chan Event</text>
+
+      <!-- 10. goroutine: forward events -->
+      <line x1="335" y1="395" x2="125" y2="395" stroke="#1c1917" stroke-width="1.2" marker-end="url(#arrow-async)"/>
+      <text x="230" y="388" font-family="Geist Mono" font-size="8" fill="#1c1917">10: go goroutine → forward events</text>
+
+      <!-- 11. stdout: text_delta event -->
+      <line x1="955" y1="430" x2="795" y2="430" stroke="#a8a29e" stroke-width="1"/>
+      <line x1="785" y1="430" x2="560" y2="430" stroke="#a8a29e" stroke-width="1" stroke-dasharray="4 3"/>
+      <line x1="550" y1="430" x2="335" y2="430" stroke="#d97706" stroke-width="1" stroke-dasharray="4 3"/>
+      <line x1="335" y1="430" x2="125" y2="430" stroke="#1c1917" stroke-width="1.2" marker-end="url(#arrow-async)"/>
+      <text x="600" y="423" font-family="Geist Mono" font-size="7" fill="#d97706">11: Scanner → text_delta → forward</text>
+
+      <!-- 12. tool_call event -->
+      <line x1="955" y1="470" x2="795" y2="470" stroke="#a8a29e" stroke-width="1"/>
+      <line x1="785" y1="470" x2="560" y2="470" stroke="#a8a29e" stroke-width="1" stroke-dasharray="4 3"/>
+      <line x1="550" y1="470" x2="335" y2="470" stroke="#d97706" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="600" y="463" font-family="Geist Mono" font-size="7" fill="#d97706">12: tool_call → decideApproval()</text>
+
+      <!-- 13. Approval decision -->
+      <rect x="340" y="490" width="15" height="15" rx="2" fill="#D97757" opacity="0.5"/>
+      <text x="365" y="502" font-family="Geist Mono" font-size="7" fill="#D97757">13: allow? send DENIED tool_result if deny</text>
+
+      <!-- 14. tool_call forwarded -->
+      <line x1="335" y1="525" x2="125" y2="525" stroke="#1c1917" stroke-width="1.2" marker-end="url(#arrow-async)"/>
+      <text x="230" y="518" font-family="Geist Mono" font-size="7" fill="#1c1917">14: forward(tool_call)</text>
+
+      <!-- 15. turn_end event -->
+      <line x1="955" y1="555" x2="795" y2="555" stroke="#a8a29e" stroke-width="1"/>
+      <line x1="785" y1="555" x2="560" y2="555" stroke="#a8a29e" stroke-width="1" stroke-dasharray="4 3"/>
+      <line x1="550" y1="555" x2="335" y2="555" stroke="#d97706" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="600" y="548" font-family="Geist Mono" font-size="7" fill="#d97706">15: turn_end → Budget Check</text>
+
+      <!-- 16. forward turn_end -->
+      <line x1="335" y1="585" x2="125" y2="585" stroke="#1c1917" stroke-width="1.2" marker-end="url(#arrow-async)"/>
+      <text x="230" y="578" font-family="Geist Mono" font-size="7" fill="#1c1917">16: forward(turn_end)</text>
+
+      <!-- 17. close channel -->
+      <line x1="335" y1="620" x2="125" y2="620" stroke="#a8a29e" stroke-width="1" marker-end="url(#arrow-return)"/>
+      <text x="230" y="613" font-family="Geist Mono" font-size="7" fill="#a8a29e">17: close(out)</text>
+
+      <!-- 18. proc.Close() -->
+      <line x1="550" y1="640" x2="785" y2="640" stroke="#1c1917" stroke-width="1" marker-end="url(#arrow-sync)"/>
+      <text x="668" y="633" font-family="Geist Mono" font-size="7" fill="#1c1917">18: proc.Close() → SIGTERM</text>
+    </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-eyebrow">MESSAGE SEQUENCE</div>
+      <div class="card-header"><div class="card-dot ink"></div><h3>消息时序</h3></div>
+      <ul><li>1-2: 调用方 → Orchestrator 输入校验</li><li>3-6: Orchestrator → Agent 启动子进程</li><li>7-8: AgentProcess → CLI 进程启动 + 输入</li><li>9-10: goroutine 启动，事件开始桥接</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-eyebrow">EVENT PROPAGATION</div>
+      <div class="card-header"><div class="card-dot accent"></div><h3>事件传播</h3></div>
+      <ul><li>11: text_delta: CLI → Scanner → Agent → Orch → Caller</li><li>12-14: tool_call: 审批介入 + 转发</li><li>15-16: turn_end: 预算检查 + 转发</li><li>17-18: 通道关闭 + 子进程清理</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">Agent Wrapper · Sequence Diagram · 2026</div>
+</div>
+</body>
+</html>

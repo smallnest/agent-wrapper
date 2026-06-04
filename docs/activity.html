@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Wrapper 活动图</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist', sans-serif; background: #faf6f0; min-height: 100vh; padding: 2.5rem 2rem; color: #1c1917; }
+    .container { max-width: 960px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #78716c; margin-bottom: 0.375rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 1.75rem; font-weight: 400; color: #1c1917; }
+    .subtitle { color: #78716c; font-size: 0.8125rem; margin-top: 0.375rem; }
+    .diagram-desc { color: #a8a29e; font-size: 0.6875rem; margin-top: 0.5rem; line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #f0ebe3; border: 1px solid rgba(28,25,23,0.12); border-radius: 8px; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 680px; display: block; }
+    .cards { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid rgba(28,25,23,0.12); border-radius: 6px; padding: 1.25rem; }
+    .card-eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.625rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #a8a29e; margin-bottom: 0.5rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.ink { background: #1c1917; }
+    .card-dot.accent { background: #d97706; }
+    .card-dot.muted { background: #78716c; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1c1917; }
+    .card ul { list-style: none; color: #78716c; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(28,25,23,0.08); text-align: center; font-family: 'Geist Mono', monospace; color: #a8a29e; font-size: 0.625rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="eyebrow">BEHAVIORAL DIAGRAM</div>
+    <h1>Agent Wrapper 活动图</h1>
+    <div class="subtitle">单次 Agent 调用的完整活动流程与阶段划分</div>
+    <div class="diagram-desc">按阶段展示 Orchestrator 如何处理一次 Agent 调用：校验 → 启动 → 事件处理 → 审批/预算 → 终止。</div>
+  </div>
+
+  <div class="diagram-container">
+    <svg viewBox="0 0 740 800" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#8B8680"/></marker>
+      </defs>
+
+      <!-- Phase group backgrounds -->
+      <rect x="30" y="20" width="680" height="100" rx="8" fill="#faf7f2" stroke="#a8a29e" stroke-width="1" stroke-dasharray="6 3"/>
+      <text x="50" y="45" font-family="Geist Mono" font-size="9" font-weight="600" fill="#a8a29e">PHASE 1: VALIDATION</text>
+
+      <rect x="30" y="140" width="680" height="130" rx="8" fill="#faf7f2" stroke="#a8a29e" stroke-width="1" stroke-dasharray="6 3"/>
+      <text x="50" y="165" font-family="Geist Mono" font-size="9" font-weight="600" fill="#a8a29e">PHASE 2: AGENT STARTUP</text>
+
+      <rect x="30" y="290" width="680" height="290" rx="8" fill="#faf7f2" stroke="#a8a29e" stroke-width="1" stroke-dasharray="6 3"/>
+      <text x="50" y="315" font-family="Geist Mono" font-size="9" font-weight="600" fill="#a8a29e">PHASE 3: EVENT LOOP</text>
+
+      <rect x="30" y="600" width="680" height="100" rx="8" fill="#faf7f2" stroke="#a8a29e" stroke-width="1" stroke-dasharray="6 3"/>
+      <text x="50" y="625" font-family="Geist Mono" font-size="9" font-weight="600" fill="#a8a29e">PHASE 4: TERMINATION</text>
+
+      <!-- Initial node -->
+      <circle cx="370" cy="62" r="10" fill="#1c1917"/>
+      <line x1="370" y1="72" x2="370" y2="90" stroke="#8B8680" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Phase 1 activity -->
+      <rect x="250" y="90" width="240" height="55" rx="8" fill="#ffffff" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="370" y="112" text-anchor="middle" font-family="Geist Mono" font-size="10" font-weight="600" fill="#1c1917">Validate Input</text>
+      <line x1="270" y1="122" x2="470" y2="122" stroke="#E8E4DE" stroke-width="1"/>
+      <text x="370" y="138" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">check Prompt != ""</text>
+
+      <line x1="370" y1="145" x2="370" y2="175" stroke="#8B8680" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Phase 2 activities -->
+      <rect x="250" y="180" width="240" height="55" rx="8" fill="#ffffff" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="370" y="202" text-anchor="middle" font-family="Geist Mono" font-size="10" font-weight="600" fill="#1c1917">Build CLI Arguments</text>
+      <line x1="270" y1="212" x2="470" y2="212" stroke="#E8E4DE" stroke-width="1"/>
+      <text x="370" y="228" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">args = [-p, prompt, --output-format, stream-json]</text>
+
+      <line x1="370" y1="235" x2="370" y2="260" stroke="#8B8680" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Fork: Launch subprocess + Start scanner -->
+      <line x1="370" y1="265" x2="630" y2="265" stroke="#1c1917" stroke-width="2"/>
+      <line x1="370" y1="265" x2="370" y2="325" stroke="#8B8680" stroke-width="1"/>
+      <line x1="370" y1="265" x2="130" y2="265" stroke="#1c1917" stroke-width="2"/>
+      <line x1="630" y1="265" x2="630" y2="325" stroke="#8B8680" stroke-width="1"/>
+      <line x1="130" y1="265" x2="130" y2="325" stroke="#8B8680" stroke-width="1"/>
+
+      <rect x="50" y="330" width="160" height="55" rx="8" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="130" y="352" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Start Subprocess</text>
+      <text x="130" y="370" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">process.StartProcess(ctx)</text>
+
+      <rect x="290" y="330" width="160" height="55" rx="8" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="370" y="352" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Init Scanner</text>
+      <text x="370" y="370" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">NewJSONRPCScanner(stdout)</text>
+
+      <rect x="530" y="330" width="160" height="55" rx="8" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="610" y="352" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Routine: Monitor</text>
+      <text x="610" y="370" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">ctx.Done() → SIGTERM</text>
+
+      <!-- Join -->
+      <line x1="130" y1="385" x2="130" y2="420" stroke="#8B8680" stroke-width="1"/>
+      <line x1="370" y1="385" x2="370" y2="420" stroke="#8B8680" stroke-width="1"/>
+      <line x1="610" y1="385" x2="610" y2="420" stroke="#8B8680" stroke-width="1"/>
+      <line x1="130" y1="420" x2="610" y2="420" stroke="#1c1917" stroke-width="2"/>
+      <line x1="370" y1="420" x2="370" y2="450" stroke="#8B8680" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Phase 3: event loop -->
+      <rect x="250" y="455" width="240" height="50" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+      <text x="370" y="475" text-anchor="middle" font-family="Geist Mono" font-size="10" font-weight="600" fill="#1c1917">for evt := range eventCh</text>
+      <text x="370" y="492" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">goroutine: read frames</text>
+
+      <line x1="370" y1="505" x2="370" y2="530" stroke="#8B8680" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Decision: Event type -->
+      <polygon points="370,535 420,565 370,595 320,565" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="370" y="565" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#1c1917">Type?</text>
+
+      <!-- Branches -->
+      <line x1="320" y1="565" x2="180" y2="565" stroke="#8B8680" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="250" y="558" font-family="Geist Mono" font-size="6" fill="#8B8680">text_delta</text>
+      <rect x="105" y="550" width="75" height="30" rx="5" fill="#ffffff" stroke="#d97706" stroke-width="1"/>
+      <text x="142" y="570" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#d97706">forward</text>
+
+      <line x1="370" y1="595" x2="370" y2="630" stroke="#8B8680" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="382" y="616" font-family="Geist Mono" font-size="6" fill="#8B8680">tool_call</text>
+
+      <rect x="255" y="635" width="230" height="45" rx="8" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="370" y="654" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Run Approval Handler</text>
+      <text x="370" y="670" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">allow | deny | abort</text>
+
+      <line x1="420" y1="565" x2="550" y2="565" stroke="#8B8680" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="490" y="558" font-family="Geist Mono" font-size="6" fill="#8B8680">turn_end</text>
+      <rect x="550" y="545" width="120" height="40" rx="5" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="610" y="562" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#1c1917">Budget Check</text>
+      <text x="610" y="578" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#8B8680">if set</text>
+
+      <!-- Phase 4: decision -->
+      <line x1="370" y1="680" x2="370" y2="720" stroke="#8B8680" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <polygon points="370,725 420,755 370,785 320,755" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="370" y="755" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#1c1917">Stop?</text>
+
+      <!-- continue loop -->
+      <line x1="320" y1="755" x2="80" y2="755" stroke="#8B8680" stroke-width="1"/>
+      <text x="200" y="750" font-family="Geist Mono" font-size="6" fill="#8B8680">no: continue</text>
+      <path d="M 80 755 L 80 480 L 250 480" fill="none" stroke="#8B8680" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+
+      <!-- stop -->
+      <line x1="420" y1="755" x2="500" y2="755" stroke="#8B8680" stroke-width="1"/>
+      <text x="460" y="750" font-family="Geist Mono" font-size="6" fill="#8B8680">yes</text>
+
+      <rect x="500" y="735" width="140" height="40" rx="8" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="570" y="755" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="500" fill="#1c1917">Cleanup Process</text>
+      <text x="570" y="770" text-anchor="middle" font-family="Geist Mono" font-size="6" fill="#8B8680">SIGTERM → Wait → Close</text>
+
+      <line x1="570" y1="775" x2="570" y2="810" stroke="#8B8680" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Final node -->
+      <circle cx="570" cy="822" r="8" fill="#1c1917"/>
+      <circle cx="570" cy="822" r="14" fill="none" stroke="#1c1917" stroke-width="1.5"/>
+
+      <!-- Swimlane divider labels -->
+      <text x="20" y="400" font-family="Geist Mono" font-size="7" fill="#a8a29e" transform="rotate(-90,20,400)">parallel tasks</text>
+    </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-eyebrow">ACTIVITY PHASES</div>
+      <div class="card-header"><div class="card-dot ink"></div><h3>活动阶段</h3></div>
+      <ul><li>Phase 1: 输入校验 — 检查 Prompt 非空</li><li>Phase 2: Agent 启动 — 构建参数、启子进程、初始化扫描器</li><li>Phase 3: 事件循环 — 按类型分派，审批/预算介入</li><li>Phase 4: 终止清理 — SIGTERM → 回收进程</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-eyebrow">PARALLEL ACTIVITIES</div>
+      <div class="card-header"><div class="card-dot accent"></div><h3>并行活动</h3></div>
+      <ul><li>子进程启动 + 扫描器初始化 + 上下文监听（3路并行）</li><li>goroutine 分开读取 stdout frames 和执行事件循环</li><li>ctx cancellation → 独立 goroutine 发送 SIGTERM</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">Agent Wrapper · Activity Diagram · 2026</div>
+</div>
+</body>
+</html>

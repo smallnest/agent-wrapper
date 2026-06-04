@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Wrapper 剖面图</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist', sans-serif; background: #faf6f0; min-height: 100vh; padding: 2.5rem 2rem; color: #1c1917; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #78716c; margin-bottom: 0.375rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 1.75rem; font-weight: 400; color: #1c1917; }
+    .subtitle { color: #78716c; font-size: 0.8125rem; margin-top: 0.375rem; }
+    .diagram-desc { color: #a8a29e; font-size: 0.6875rem; margin-top: 0.5rem; line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #f0ebe3; border: 1px solid rgba(28,25,23,0.12); border-radius: 8px; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 780px; display: block; }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid rgba(28,25,23,0.12); border-radius: 6px; padding: 1.25rem; }
+    .card-eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.625rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #a8a29e; margin-bottom: 0.5rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.ink { background: #1c1917; }
+    .card-dot.accent { background: #d97706; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1c1917; }
+    .card ul { list-style: none; color: #78716c; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(28,25,23,0.08); text-align: center; font-family: 'Geist Mono', monospace; color: #a8a29e; font-size: 0.625rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="eyebrow">STRUCTURAL DIAGRAM</div>
+    <h1>Agent Wrapper 剖面图</h1>
+    <div class="subtitle">自定义构造型与领域特定建模扩展</div>
+    <div class="diagram-desc">定义 agent-wrapper 项目中的 UML 扩展：Provider 构造型、Agent Interface 约束、Event 类型枚举。适用于领域特定建模。</div>
+  </div>
+
+  <div class="diagram-container">
+    <svg viewBox="0 0 820 560" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow-hollow" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto"><polygon points="0 0, 12 4, 0 8" fill="none" stroke="#78716c" stroke-width="1.2"/></marker>
+        <marker id="arrow-filled" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="#78716c"/></marker>
+      </defs>
+
+      <!-- UML Metamodel (reference) -->
+      <rect x="20" y="20" width="780" height="90" rx="6" fill="#faf7f2" stroke="#78716c" stroke-width="1" stroke-dasharray="6 3"/>
+      <text x="40" y="44" font-family="Geist Mono" font-size="9" font-weight="600" fill="#78716c">«metamodel» UML Core</text>
+      <rect x="50" y="55" width="130" height="30" rx="4" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="115" y="75" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#1c1917">«metaclass» Class</text>
+      <rect x="220" y="55" width="130" height="30" rx="4" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="285" y="75" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#1c1917">«metaclass» Interface</text>
+      <rect x="390" y="55" width="130" height="30" rx="4" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="455" y="75" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#1c1917">«metaclass» Enumeration</text>
+      <rect x="560" y="55" width="130" height="30" rx="4" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="625" y="75" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#1c1917">«metaclass» DataType</text>
+
+      <!-- Profile Definition: Agent Provider Profile -->
+      <rect x="20" y="135" width="780" height="195" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+      <rect x="32" y="122" width="100" height="22" rx="4" fill="#d97706"/>
+      <text x="82" y="137" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#ffffff">«profile» AgentProvider</text>
+
+      <!-- Stereotype 1: «provider» -->
+      <rect x="60" y="155" width="330" height="80" rx="6" fill="#faf7f2" stroke="#1c1917" stroke-width="1.2"/>
+      <rect x="70" y="145" width="80" height="18" rx="3" fill="#f0ebe3"/>
+      <text x="110" y="158" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">«stereotype»</text>
+      <text x="225" y="178" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">«provider»</text>
+      <text x="225" y="196" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">extends: Class</text>
+      <text x="225" y="212" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">tag: providerName: Provider</text>
+      <text x="225" y="226" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#a8a29e">tag: protocol: "stream-json" | "json" | "json-rpc"</text>
+
+      <!-- Stereotype 2: «agentInterface» -->
+      <rect x="450" y="155" width="330" height="80" rx="6" fill="#faf7f2" stroke="#1c1917" stroke-width="1.2"/>
+      <rect x="460" y="145" width="80" height="18" rx="3" fill="#f0ebe3"/>
+      <text x="500" y="158" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">«stereotype»</text>
+      <text x="615" y="178" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">«agentInterface»</text>
+      <text x="615" y="196" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">extends: Interface</text>
+      <text x="615" y="212" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">tag: streaming: Boolean {required = true}</text>
+      <text x="615" y="226" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#a8a29e">tag: toolSupport: Boolean</text>
+
+      <!-- Extension arrows -->
+      <line x1="180" y1="155" x2="180" y2="85" stroke="#78716c" stroke-width="1" marker-end="url(#arrow-hollow)"/>
+      <text x="188" y="118" font-family="Geist Mono" font-size="6" fill="#a8a29e">«extend»</text>
+
+      <line x1="390" y1="195" x2="390" y2="85" stroke="#78716c" stroke-width="1" marker-end="url(#arrow-hollow)"/>
+
+      <line x1="285" y1="155" x2="285" y2="85" stroke="#78716c" stroke-width="1" marker-end="url(#arrow-hollow)"/>
+
+      <!-- Profile Definition: Event Profile -->
+      <rect x="20" y="345" width="780" height="195" rx="8" fill="#ffffff" stroke="#8B6B7D" stroke-width="1.5"/>
+      <rect x="32" y="332" width="100" height="22" rx="4" fill="#8B6B7D"/>
+      <text x="82" y="347" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#ffffff">«profile» EventStream</text>
+
+      <!-- Stereotype 3: «event» -->
+      <rect x="60" y="370" width="230" height="80" rx="6" fill="#faf7f2" stroke="#1c1917" stroke-width="1.2"/>
+      <rect x="70" y="360" width="80" height="18" rx="3" fill="#f0ebe3"/>
+      <text x="110" y="373" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">«stereotype»</text>
+      <text x="175" y="393" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">«event»</text>
+      <text x="175" y="411" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">extends: DataType</text>
+      <text x="175" y="427" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">tag: eventType: EventType</text>
+      <text x="175" y="443" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#a8a29e">tag: sessionScoped: Boolean</text>
+
+      <!-- Stereotype 4: «eventType» -->
+      <rect x="330" y="370" width="230" height="80" rx="6" fill="#faf7f2" stroke="#1c1917" stroke-width="1.2"/>
+      <rect x="340" y="360" width="80" height="18" rx="3" fill="#f0ebe3"/>
+      <text x="380" y="373" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">«stereotype»</text>
+      <text x="445" y="393" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">«eventType»</text>
+      <text x="445" y="411" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">extends: Enumeration</text>
+      <text x="445" y="427" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">tag: values: Set{text_delta, tool_call,</text>
+      <text x="445" y="443" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">tool_result, turn_end, error}</text>
+
+      <!-- Stereotype 5: «handler» -->
+      <rect x="600" y="370" width="190" height="80" rx="6" fill="#faf7f2" stroke="#1c1917" stroke-width="1.2"/>
+      <rect x="610" y="360" width="80" height="18" rx="3" fill="#f0ebe3"/>
+      <text x="650" y="373" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">«stereotype»</text>
+      <text x="695" y="393" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">«handler»</text>
+      <text x="695" y="411" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">extends: DataType</text>
+      <text x="695" y="427" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">tag: lifecycle: "pre" |</text>
+      <text x="695" y="443" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">"post" | "inline"</text>
+
+      <!-- Extension arrows to metamodel -->
+      <line x1="175" y1="370" x2="455" y2="85" stroke="#78716c" stroke-width="1" marker-end="url(#arrow-hollow)"/>
+      <line x1="445" y1="370" x2="455" y2="85" stroke="#78716c" stroke-width="1" marker-end="url(#arrow-hollow)"/>
+      <line x1="695" y1="370" x2="625" y2="85" stroke="#78716c" stroke-width="1" marker-end="url(#arrow-hollow)"/>
+
+      <!-- Application example -->
+      <rect x="60" y="465" width="170" height="55" rx="5" fill="#faf7f2" stroke="#d97706" stroke-width="1.2"/>
+      <text x="145" y="485" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#d97706">«provider»</text>
+      <text x="145" y="502" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">ClaudeCodeAgent</text>
+      <text x="145" y="516" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">protocol = "stream-json"</text>
+
+      <rect x="270" y="465" width="170" height="55" rx="5" fill="#faf7f2" stroke="#8B6B7D" stroke-width="1.2"/>
+      <text x="355" y="485" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#8B6B7D">«event»</text>
+      <text x="355" y="502" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Event</text>
+      <text x="355" y="516" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">sessionScoped = true</text>
+    </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-eyebrow">CUSTOM STEREOTYPES</div>
+      <div class="card-header"><div class="card-dot ink"></div><h3>构造型定义</h3></div>
+      <ul><li>«provider» — 标记 Agent CLI 适配实现类，带 protocol 标签</li><li>«agentInterface» — 标记可流式/支持工具调用的统一接口</li><li>«event» — 标记事件数据类型，带 sessionScoped 标签</li><li>«eventType» — 标记事件类型枚举（5 种值）</li><li>«handler» — 标记生命周期回调类型（pre/post/inline）</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-eyebrow">PROFILE APPLICATION</div>
+      <div class="card-header"><div class="card-dot accent"></div><h3>应用示例</h3></div>
+      <ul><li>ClaudeCodeAgent 应用 «provider», protocol="stream-json"</li><li>CodexAgent 应用 «provider», protocol="json"</li><li>Event 应用 «event», sessionScoped=true</li><li>ApprovalHandler 应用 «handler», lifecycle="inline"</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">Agent Wrapper · Profile Diagram · 2026</div>
+</div>
+</body>
+</html>

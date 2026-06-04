@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Wrapper 交互概览图</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Geist', sans-serif; background: #faf6f0; min-height: 100vh; padding: 2.5rem 2rem; color: #1c1917; }
+    .container { max-width: 960px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #78716c; margin-bottom: 0.375rem; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 1.75rem; font-weight: 400; color: #1c1917; }
+    .subtitle { color: #78716c; font-size: 0.8125rem; margin-top: 0.375rem; }
+    .diagram-desc { color: #a8a29e; font-size: 0.6875rem; margin-top: 0.5rem; line-height: 1.5; font-style: italic; }
+    .diagram-container { background: #f0ebe3; border: 1px solid rgba(28,25,23,0.12); border-radius: 8px; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 640px; display: block; }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid rgba(28,25,23,0.12); border-radius: 6px; padding: 1.25rem; }
+    .card-eyebrow { font-family: 'Geist Mono', monospace; font-size: 0.625rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: #a8a29e; margin-bottom: 0.5rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .card-dot.ink { background: #1c1917; }
+    .card-dot.accent { background: #d97706; }
+    .card-dot.muted { background: #78716c; }
+    .card-dot.link { background: #c05621; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; color: #1c1917; }
+    .card ul { list-style: none; color: #78716c; font-size: 0.75rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.25rem; }
+    .footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(28,25,23,0.08); text-align: center; font-family: 'Geist Mono', monospace; color: #a8a29e; font-size: 0.625rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="eyebrow">BEHAVIORAL DIAGRAM</div>
+    <h1>Agent Wrapper 交互概览图</h1>
+    <div class="subtitle">宏观交互场景：控制流 + 内嵌序列片段</div>
+    <div class="diagram-desc">展示 4 个主要交互场景的连接关系：标准调用、审批干预、上下文溢出重试、异常终止。每个场景内嵌简化序列片段。</div>
+  </div>
+
+  <div class="diagram-container">
+    <svg viewBox="0 0 720 680" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#78716c"/></marker>
+      </defs>
+
+      <!-- Initial node -->
+      <circle cx="360" cy="25" r="10" fill="#1c1917"/>
+
+      <line x1="360" y1="35" x2="360" y2="65" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Decision: input type -->
+      <polygon points="360,70 410,100 360,130 310,100" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="360" y="100" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#1c1917">Input</text>
+      <text x="360" y="112" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#1c1917">Valid?</text>
+
+      <!-- No → Error -->
+      <line x1="310" y1="100" x2="130" y2="100" stroke="#D97757" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="220" y="93" font-family="Geist Mono" font-size="6" fill="#D97757">no</text>
+
+      <rect x="140" y="80" width="60" height="28" rx="14" fill="#D97757"/>
+      <text x="170" y="98" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#ffffff">ERR</text>
+
+      <!-- Yes → Interaction 1: Standard Call -->
+      <line x1="360" y1="130" x2="360" y2="170" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="370" y="152" font-family="Geist Mono" font-size="6" fill="#a8a29e">yes</text>
+
+      <rect x="180" y="175" width="360" height="135" rx="6" fill="#ffffff" stroke="#1c1917" stroke-width="1.5"/>
+      <text x="360" y="195" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#78716c">ref</text>
+      <text x="360" y="210" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Standard Call</text>
+      <line x1="210" y1="220" x2="510" y2="220" stroke="#E8E4DE" stroke-width="1"/>
+
+      <!-- Mini sequence inside -->
+      <line x1="220" y1="235" x2="220" y2="295" stroke="#1c1917" stroke-width="1"/>
+      <rect x="200" y="230" width="40" height="15" rx="3" fill="#1c1917"/>
+      <text x="220" y="241" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#ffffff">C</text>
+
+      <line x1="320" y1="235" x2="320" y2="295" stroke="#d97706" stroke-width="1"/>
+      <rect x="300" y="230" width="40" height="15" rx="3" fill="#d97706"/>
+      <text x="320" y="241" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#ffffff">O</text>
+
+      <line x1="420" y1="235" x2="420" y2="295" stroke="#1c1917" stroke-width="1"/>
+      <rect x="400" y="230" width="40" height="15" rx="3" fill="#1c1917"/>
+      <text x="420" y="241" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#ffffff">A</text>
+
+      <line x1="500" y1="235" x2="500" y2="295" stroke="#a8a29e" stroke-width="1"/>
+      <rect x="480" y="230" width="40" height="15" rx="3" fill="#a8a29e"/>
+      <text x="500" y="241" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#ffffff">CLI</text>
+
+      <line x1="220" y1="250" x2="310" y2="250" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="265" y="245" font-family="Geist Mono" font-size="6" fill="#78716c">Run(input)</text>
+      <line x1="320" y1="265" x2="410" y2="265" stroke="#d97706" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="365" y="260" font-family="Geist Mono" font-size="6" fill="#d97706">Run(input)</text>
+      <line x1="420" y1="280" x2="490" y2="280" stroke="#78716c" stroke-width="1" marker-end="url(#arrow)"/>
+      <text x="455" y="275" font-family="Geist Mono" font-size="6" fill="#78716c">StartProcess</text>
+
+      <!-- Arrow from Standard Call to decision -->
+      <line x1="360" y1="310" x2="360" y2="340" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Decision: event type -->
+      <polygon points="360,345 410,375 360,405 310,375" fill="#ffffff" stroke="#1c1917" stroke-width="1.2"/>
+      <text x="360" y="375" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#1c1917">Event?</text>
+
+      <!-- tool_call → Interaction 2: Approval -->
+      <line x1="310" y1="375" x2="200" y2="460" stroke="#78716c" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="240" y="420" font-family="Geist Mono" font-size="6" fill="#a8a29e">tool_call</text>
+
+      <rect x="60" y="465" width="320" height="110" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+      <text x="220" y="485" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#d97706">ref</text>
+      <text x="220" y="500" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Approval Intervention</text>
+      <line x1="90" y1="510" x2="350" y2="510" stroke="#E8E4DE" stroke-width="1"/>
+
+      <rect x="90" y="525" width="120" height="16" rx="3" fill="#FDF2F0" stroke="#D97757" stroke-width="0.5"/>
+      <text x="150" y="537" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#D97757">1. ApprovalHandler(evt)</text>
+      <rect x="90" y="545" width="120" height="16" rx="3" fill="#faf7f2" stroke="#78716c" stroke-width="0.5"/>
+      <text x="150" y="557" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">2. allow → forward</text>
+      <rect x="90" y="565" width="120" height="16" rx="3" fill="#FDF2F0" stroke="#D97757" stroke-width="0.5"/>
+      <text x="150" y="577" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#D97757">3. deny → DENIED result</text>
+
+      <rect x="230" y="525" width="120" height="16" rx="3" fill="#FDF2F0" stroke="#D97757" stroke-width="0.5"/>
+      <text x="290" y="537" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#D97757">4. abort → stop</text>
+
+      <!-- text_delta → forward -->
+      <line x1="360" y1="405" x2="360" y2="430" stroke="#78716c" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="370" y="420" font-family="Geist Mono" font-size="6" fill="#a8a29e">text_delta</text>
+
+      <rect x="270" y="435" width="180" height="28" rx="6" fill="#ffffff" stroke="#1c1917" stroke-width="1"/>
+      <text x="360" y="453" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#1c1917">forward(evt) to caller</text>
+
+      <line x1="360" y1="463" x2="360" y2="495" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- turn_end → Interaction 3: Budget -->
+      <line x1="410" y1="375" x2="530" y2="460" stroke="#78716c" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="480" y="420" font-family="Geist Mono" font-size="6" fill="#a8a29e">turn_end</text>
+
+      <rect x="440" y="465" width="250" height="110" rx="6" fill="#ffffff" stroke="#7B9D6B" stroke-width="1.5"/>
+      <text x="565" y="485" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#7B9D6B">ref</text>
+      <text x="565" y="500" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Budget + Terminate</text>
+      <line x1="470" y1="510" x2="660" y2="510" stroke="#E8E4DE" stroke-width="1"/>
+
+      <rect x="470" y="525" width="120" height="16" rx="3" fill="#faf7f2" stroke="#7B9D6B" stroke-width="0.5"/>
+      <text x="530" y="537" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#7B9D6B">1. BudgetHandler check</text>
+      <rect x="470" y="545" width="120" height="16" rx="3" fill="#faf7f2" stroke="#78716c" stroke-width="0.5"/>
+      <text x="530" y="557" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">2. stop? → close(out)</text>
+      <rect x="470" y="565" width="120" height="16" rx="3" fill="#faf7f2" stroke="#78716c" stroke-width="0.5"/>
+      <text x="530" y="577" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">3. proc.Close()</text>
+
+      <!-- Interaction 4: Context Overflow -->
+      <line x1="100" y1="575" x2="100" y2="610" stroke="#D97757" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <rect x="40" y="615" width="280" height="55" rx="6" fill="#FDF2F0" stroke="#D97757" stroke-width="1.2"/>
+      <text x="180" y="635" text-anchor="middle" font-family="Geist Mono" font-size="8" fill="#D97757">ref</text>
+      <text x="180" y="650" text-anchor="middle" font-family="Geist Mono" font-size="9" font-weight="600" fill="#1c1917">Context Overflow Retry</text>
+      <text x="180" y="664" text-anchor="middle" font-family="Geist Mono" font-size="7" fill="#78716c">compress → retry (max 3)</text>
+
+      <line x1="180" y1="615" x2="180" y2="175" stroke="#D97757" stroke-width="1" stroke-dasharray="4 3"/>
+
+      <!-- Final -->
+      <line x1="565" y1="575" x2="565" y2="630" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <circle cx="565" cy="642" r="8" fill="#1c1917"/>
+      <circle cx="565" cy="642" r="14" fill="none" stroke="#1c1917" stroke-width="1.5"/>
+
+      <!-- Legend -->
+      <rect x="420" y="590" width="210" height="68" rx="4" fill="#faf7f2" stroke="#a8a29e" stroke-width="1"/>
+      <text x="525" y="608" text-anchor="middle" font-family="Geist Mono" font-size="7" font-weight="600" fill="#1c1917">Interaction Fragments</text>
+      <line x1="435" y1="615" x2="615" y2="615" stroke="#E8E4DE" stroke-width="0.5"/>
+      <text x="450" y="630" font-family="Geist Mono" font-size="6" fill="#78716c">ref — nested sequence diagram</text>
+      <text x="450" y="644" font-family="Geist Mono" font-size="6" fill="#78716c">⟐ — decision node (if/else)</text>
+      <text x="450" y="658" font-family="Geist Mono" font-size="6" fill="#D97757">--→ retry loop</text>
+    </svg>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-eyebrow">INTERACTION SCENARIOS</div>
+      <div class="card-header"><div class="card-dot ink"></div><h3>交互场景</h3></div>
+      <ul><li>Standard Call — 正常调用：Caller → Orch → Agent → CLI</li><li>Approval Intervention — 工具审批：allow/deny/abort 三条路径</li><li>Budget + Terminate — 预算控制 + 正常终止</li><li>Context Overflow Retry — 上下文溢出压缩重试循环</li></ul>
+    </div>
+    <div class="card">
+      <div class="card-eyebrow">CONTROL FLOW</div>
+      <div class="card-header"><div class="card-dot link"></div><h3>控制流</h3></div>
+      <ul><li>入口校验 → 有效则进入 Standard Call</li><li>Standard Call 后按事件类型分派</li><li>text_delta: 直接转发</li><li>tool_call: 进入审批片段</li><li>turn_end: 进入预算+终止片段</li><li>上下文溢出: 重试回路</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">Agent Wrapper · Interaction Overview Diagram · 2026</div>
+</div>
+</body>
+</html>

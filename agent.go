@@ -6,7 +6,7 @@ import (
 	"github.com/smallnest/agent-wrapper/types"
 )
 
-// Agent 是所有 coding agent 后端的统一接口。
+// Agent is the unified interface for all coding agent backends.
 type Agent interface {
 	Name() string
 	Provider() types.Provider

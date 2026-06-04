@@ -1,9 +1,9 @@
-// multi-turn 演示 orchestrator 多 turn 对话编排。
+// multi-turn demonstrates orchestrator multi-turn conversation handling.
 //
-// Orchestrator 自动处理 agent 的 tool_use/tool_result 循环，
-// 不必手动管理 session。
+// The orchestrator automatically manages the agent's tool_use/tool_result
+// loop — no manual session management needed.
 //
-// 使用方法:
+// Usage:
 //
 //	go run main.go
 package main

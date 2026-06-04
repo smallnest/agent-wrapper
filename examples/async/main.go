@@ -1,9 +1,9 @@
-// async 演示 orch.Run 流式异步消费。
+// async demonstrates streaming async consumption of orch.Run.
 //
-// 和 RunSync 不同，Run 返回事件通道，调用方可边输出边处理，
-// 适合需要实时流式展示的交互式场景。
+// Unlike RunSync, Run returns an event channel that the caller can
+// process in real time — ideal for interactive streaming display.
 //
-// 使用方法:
+// Usage:
 //
 //	go run main.go
 package main

@@ -1,11 +1,11 @@
-// harness-engineering 演示调用 agent runtime 失败后的恢复处理。
+// harness-engineering demonstrates error recovery after agent runtime failures.
 //
-// 场景：
-//  1. 上下文超限 → 自动压缩 + 重试（内置 retry loop）
-//  2. 网络超时/其他错误 → 不重试，直接返回错误
-//  3. 重试耗尽 → 最终返回错误
+// Scenarios:
+//  1. Context exceeded → auto-compress + retry (built-in retry loop)
+//  2. Network timeout / other errors → no retry, return error immediately
+//  3. Retry exhausted → final error returned
 //
-// 使用方法:
+// Usage:
 //
 //	go run main.go
 package main

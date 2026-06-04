@@ -1,9 +1,9 @@
-// session 演示 session resume 流程。
+// session demonstrates the session resume flow.
 //
-// 第一次 run 获取 agent runtime 的 session ID，
-// 第二次 run 用 session ID 恢复上下文。
+// First run obtains the agent runtime's session ID;
+// second run resumes context using that session ID.
 //
-// 使用方法:
+// Usage:
 //
 //	go run main.go
 package main

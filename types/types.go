@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 )
 
-// Provider 标识底层 agent 实现。
+// Provider identifies the underlying agent implementation.
 type Provider string
 
 const (
@@ -17,10 +17,10 @@ const (
 	ProviderKimiCode   Provider = "kimi-code"
 )
 
-// String 返回 provider 的字符串标识。
+// String returns the provider string identifier.
 func (p Provider) String() string { return string(p) }
 
-// AllProviders 返回所有内置 provider 的列表。
+// AllProviders returns a list of all built-in providers.
 func AllProviders() []Provider {
 	return []Provider{
 		ProviderClaudeCode,
@@ -33,7 +33,7 @@ func AllProviders() []Provider {
 	}
 }
 
-// Role 表示消息的发送者角色。
+// Role represents the sender role of a message.
 type Role string
 
 const (
@@ -43,32 +43,32 @@ const (
 	RoleToolResult Role = "tool_result"
 )
 
-// Message 是会话中的单条消息。
+// Message is a single message in a conversation.
 type Message struct {
 	Role    Role   `json:"role"`
 	Content string `json:"content"`
 
-	// 以下字段仅 tool_use 角色使用
+	// Fields for tool_use role only
 	ToolCallID string          `json:"tool_call_id,omitempty"`
 	ToolName   string          `json:"tool_name,omitempty"`
 	ToolInput  json.RawMessage `json:"tool_input,omitempty"`
 
-	// 以下字段仅 tool_result 角色使用
+	// Fields for tool_result role only
 	ToolCallResultID string `json:"tool_call_result_id,omitempty"`
 	IsToolError      bool   `json:"is_tool_error,omitempty"`
 }
 
-// NewUserMessage 创建一个用户文本消息。
+// NewUserMessage creates a user text message.
 func NewUserMessage(content string) Message {
 	return Message{Role: RoleUser, Content: content}
 }
 
-// NewAssistantMessage 创建一个 assistant 文本消息。
+// NewAssistantMessage creates an assistant text message.
 func NewAssistantMessage(content string) Message {
 	return Message{Role: RoleAssistant, Content: content}
 }
 
-// NewToolUseMessage 创建一个 tool_use 消息。
+// NewToolUseMessage creates a tool_use message.
 func NewToolUseMessage(callID, name string, input json.RawMessage) Message {
 	return Message{
 		Role:       RoleToolUse,
@@ -78,7 +78,7 @@ func NewToolUseMessage(callID, name string, input json.RawMessage) Message {
 	}
 }
 
-// NewToolResultMessage 创建一个 tool_result 消息。
+// NewToolResultMessage creates a tool_result message.
 func NewToolResultMessage(callID, content string, isError bool) Message {
 	return Message{
 		Role:             RoleToolResult,
@@ -88,7 +88,7 @@ func NewToolResultMessage(callID, content string, isError bool) Message {
 	}
 }
 
-// EventType 表示 agent 产生的事件的类型。
+// EventType represents the type of events produced by an agent.
 type EventType string
 
 const (
@@ -99,36 +99,36 @@ const (
 	EventError      EventType = "error"
 )
 
-// Event 是 agent 在运行过程中产生的事件。
+// Event is produced by an agent during execution.
 type Event struct {
 	Type EventType `json:"type"`
 
-	// TextDelta: 流式文本增量
+	// TextDelta: streaming text increment
 	TextDelta string `json:"text_delta,omitempty"`
 
-	// ToolCall: agent 请求调用工具
+	// ToolCall: agent requests a tool invocation
 	ToolCallID string          `json:"tool_call_id,omitempty"`
 	ToolName   string          `json:"tool_name,omitempty"`
 	ToolInput  json.RawMessage `json:"tool_input,omitempty"`
 
-	// ToolResult: 工具执行完成
+	// ToolResult: tool execution completed
 	ToolResultID     string `json:"tool_result_id,omitempty"`
 	ToolResultOutput string `json:"tool_result_output,omitempty"`
 	ToolResultError  bool   `json:"tool_result_error,omitempty"`
 
-	// TurnEnd: 一个 turn 结束
+	// TurnEnd: a turn has ended
 	TurnNumber int         `json:"turn_number,omitempty"`
 	StopReason string      `json:"stop_reason,omitempty"`
 	TokenUsage *TokenUsage `json:"token_usage,omitempty"`
 
-	// Error: 运行中发生错误
+	// Error: error occurred during execution
 	Error error `json:"error,omitempty"`
 
-	// SessionID: agent runtime 返回的会话 ID（可存储用于后续恢复）
+	// SessionID: agent runtime session ID (persistable for later resume)
 	SessionID string `json:"session_id,omitempty"`
 }
 
-// TokenUsage 表示一次 LLM 调用的 token 用量。
+// TokenUsage represents token consumption of one LLM call.
 type TokenUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
@@ -151,7 +151,7 @@ type RunResult struct {
 	SessionID string      `json:"session_id"`
 }
 
-// RunInput 是一次 agent 调用的全部输入。
+// RunInput is the complete input for a single agent invocation.
 type RunInput struct {
 	Prompt       string
 	SessionID    string

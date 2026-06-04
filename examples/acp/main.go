@@ -1,9 +1,9 @@
-// acp 演示通过 ACP 协议连接 coding agent。
+// acp demonstrates connecting to coding agents via the ACP protocol.
 //
-// 使用 acpx 或任意 ACP 兼容二进制，通过 ACP JSON-RPC 通信。
-// 前置条件: npm install -g acpx 或安装其他 ACP agent。
+// Uses acpx or any ACP-compatible binary, communicating over ACP JSON-RPC.
+// Prerequisites: npm install -g acpx or install another ACP agent.
 //
-// 使用方法:
+// Usage:
 //
 //	go run main.go
 package main

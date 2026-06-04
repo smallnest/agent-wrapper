@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// ExitError 表示 agent CLI 进程异常退出。
+// ExitError indicates an abnormal agent CLI process exit.
 type ExitError struct {
 	ExitCode int
 	Stderr   string
@@ -16,7 +16,7 @@ func (e *ExitError) Error() string {
 	return fmt.Sprintf("agent '%s' exited with code %d: %s", e.Command, e.ExitCode, e.Stderr)
 }
 
-// ProtocolError 表示无法解析 agent CLI 的输出。
+// ProtocolError indicates agent CLI output could not be parsed.
 type ProtocolError struct {
 	Provider    Provider
 	RawBytes    []byte
@@ -28,7 +28,7 @@ func (e *ProtocolError) Error() string {
 		e.Provider, e.Description, string(e.RawBytes))
 }
 
-// BudgetExceededError 表示 token 预算耗尽。
+// BudgetExceededError indicates the token budget has been exhausted.
 type BudgetExceededError struct {
 	Used  int
 	Limit int
@@ -38,7 +38,7 @@ func (e *BudgetExceededError) Error() string {
 	return fmt.Sprintf("token budget exceeded: used %d of %d", e.Used, e.Limit)
 }
 
-// SessionNotFoundError 表示 session ID 不存在。
+// SessionNotFoundError indicates a session ID does not exist.
 type SessionNotFoundError struct {
 	ID string
 }
@@ -47,7 +47,7 @@ func (e *SessionNotFoundError) Error() string {
 	return fmt.Sprintf("session '%s' not found", e.ID)
 }
 
-// TimeoutError 表示 agent 运行超时。
+// TimeoutError indicates an agent run has timed out.
 type TimeoutError struct {
 	Duration time.Duration
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 )
 
-// Action 表示审批决策的动作。
+// Action represents an approval decision action.
 type Action string
 
 const (
@@ -14,18 +14,18 @@ const (
 	ActionAbort Action = "abort"
 )
 
-// Decision 是审批回调的返回结果。
+// Decision is the result of an approval callback.
 type Decision struct {
 	Action Action `json:"action"`
 	Reason string `json:"reason,omitempty"`
 }
 
-// ToolCall 表示 agent 请求的一个工具调用。
+// ToolCall represents a tool invocation requested by the agent.
 type ToolCall struct {
 	ID    string          `json:"id"`
 	Name  string          `json:"name"`
 	Input json.RawMessage `json:"input"`
 }
 
-// ApprovalHandler 在工具执行前被调用，决定是否允许执行。
+// ApprovalHandler is called before a tool executes to decide whether to allow it.
 type ApprovalHandler func(ctx context.Context, call ToolCall) (*Decision, error)

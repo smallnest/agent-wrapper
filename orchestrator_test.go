@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -100,9 +101,9 @@ func TestOrchestratorApprovalAllow(t *testing.T) {
 	agent := newMockAgent(events)
 
 	var approvedTool string
-	orch := NewOrchestrator(agent, WithApprovalHandler(func(ctx context.Context, call ToolCall) (*Decision, error) {
+	orch := NewOrchestrator(agent, WithApprovalHandler(func(ctx context.Context, call harness.ToolCall) (*harness.Decision, error) {
 		approvedTool = call.Name
-		return &Decision{Action: ActionAllow}, nil
+		return &harness.Decision{Action: harness.ActionAllow}, nil
 	}))
 
 	out, err := orch.Run(context.Background(), types.RunInput{
@@ -135,8 +136,8 @@ func TestOrchestratorApprovalDeny(t *testing.T) {
 	}
 
 	agent := newMockAgent(events)
-	orch := NewOrchestrator(agent, WithApprovalHandler(func(ctx context.Context, call ToolCall) (*Decision, error) {
-		return &Decision{Action: ActionDeny, Reason: "not allowed"}, nil
+	orch := NewOrchestrator(agent, WithApprovalHandler(func(ctx context.Context, call harness.ToolCall) (*harness.Decision, error) {
+		return &harness.Decision{Action: harness.ActionDeny, Reason: "not allowed"}, nil
 	}))
 
 	out, err := orch.Run(context.Background(), types.RunInput{
@@ -169,8 +170,8 @@ func TestOrchestratorApprovalAbort(t *testing.T) {
 	}
 
 	agent := newMockAgent(events)
-	orch := NewOrchestrator(agent, WithApprovalHandler(func(ctx context.Context, call ToolCall) (*Decision, error) {
-		return &Decision{Action: ActionAbort, Reason: "user cancelled"}, nil
+	orch := NewOrchestrator(agent, WithApprovalHandler(func(ctx context.Context, call harness.ToolCall) (*harness.Decision, error) {
+		return &harness.Decision{Action: harness.ActionAbort, Reason: "user cancelled"}, nil
 	}))
 
 	out, err := orch.Run(context.Background(), types.RunInput{

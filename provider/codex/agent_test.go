@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	agentwrapper "github.com/smallnest/agent-wrapper"
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -262,7 +262,7 @@ func TestContextLengthError(t *testing.T) {
 			if evt.Error == nil {
 				t.Fatal("expected non-nil error in EventError")
 			}
-			if !agentwrapper.IsContextLengthExceeded(evt.Error) {
+			if !harness.IsContextLengthExceeded(evt.Error) {
 				t.Errorf("expected ContextLengthExceededError, got %T: %v", evt.Error, evt.Error)
 			}
 			return

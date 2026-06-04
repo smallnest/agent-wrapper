@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -137,7 +138,7 @@ func TestParseAcpxError(t *testing.T) {
 	if evt.Type != types.EventError {
 		t.Errorf("got type=%s", evt.Type)
 	}
-	if !agentwrapper.IsContextLengthExceeded(evt.Error) {
+	if !harness.IsContextLengthExceeded(evt.Error) {
 		t.Error("expected context-length typed error")
 	}
 }

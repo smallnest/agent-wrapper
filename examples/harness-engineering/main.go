@@ -18,6 +18,7 @@ import (
 	"time"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/provider/claude"
 	"github.com/smallnest/agent-wrapper/types"
 )
@@ -60,7 +61,7 @@ func runWithDefaultRetry(registry *agentwrapper.Registry) {
 		Prompt: "explain what a harness is in engineering",
 	})
 	if err != nil {
-		if agentwrapper.IsContextLengthExceeded(err) {
+		if harness.IsContextLengthExceeded(err) {
 			fmt.Printf("[retry exhausted] context too long even after compression: %v\n", err)
 		} else {
 			fmt.Printf("[unrecoverable] %v\n", err)
@@ -88,7 +89,7 @@ func runWithCustomCompressor(registry *agentwrapper.Registry) {
 	}
 
 	// Aggressive: only keep last 5 messages on retry.
-	comp := agentwrapper.NewSlidingWindowCompressor(5)
+	comp := harness.NewSlidingWindowCompressor(5)
 
 	orch := agentwrapper.NewOrchestrator(agent,
 		agentwrapper.WithContextCompressor(comp),
@@ -102,7 +103,7 @@ func runWithCustomCompressor(registry *agentwrapper.Registry) {
 		Prompt: "explain engineering harness patterns",
 	})
 	if err != nil {
-		if agentwrapper.IsContextLengthExceeded(err) {
+		if harness.IsContextLengthExceeded(err) {
 			fmt.Printf("[retry exhausted] %v\n", err)
 		} else {
 			fmt.Printf("[error] %v\n", err)
@@ -160,9 +161,9 @@ func runSyncWithErrorHandling(registry *agentwrapper.Registry) {
 		Prompt: "tell me about harness engineering",
 	})
 	if err != nil {
-		var ce *agentwrapper.ContextLengthExceededError
+		var ce *harness.ContextLengthExceededError
 		switch {
-		case agentwrapper.IsContextLengthExceeded(err):
+		case harness.IsContextLengthExceeded(err):
 			fmt.Printf("[context exceeded] %v\n", err)
 			fmt.Println("Consider reducing input size or using a model with larger context window.")
 		case strings.Contains(err.Error(), "timeout"):

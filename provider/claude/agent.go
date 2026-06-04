@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	agentwrapper "github.com/smallnest/agent-wrapper"
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/process"
 	"github.com/smallnest/agent-wrapper/types"
 )
@@ -180,7 +180,7 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			wrapped := agentwrapper.WrapIfContextExceeded(err, proc.Stderr())
+			wrapped := harness.WrapIfContextExceeded(err, proc.Stderr())
 			select {
 			case events <- types.Event{Type: types.EventError, Error: wrapped}:
 			default:
@@ -188,8 +188,8 @@ func (a *ClaudeCodeAgent) Run(ctx context.Context, input types.RunInput) (<-chan
 		}
 		if ec := proc.Wait(); ec != 0 {
 			if stderr := proc.Stderr(); stderr != "" {
-				wrapped := agentwrapper.WrapIfContextExceeded(fmt.Errorf("exit %d: %s", ec, stderr), stderr)
-				if _, ok := wrapped.(*agentwrapper.ContextLengthExceededError); ok {
+				wrapped := harness.WrapIfContextExceeded(fmt.Errorf("exit %d: %s", ec, stderr), stderr)
+				if _, ok := wrapped.(*harness.ContextLengthExceededError); ok {
 					select {
 					case events <- types.Event{Type: types.EventError, Error: wrapped}:
 					default:

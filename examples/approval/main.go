@@ -6,6 +6,7 @@ import (
 	"os"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/provider/claude"
 	"github.com/smallnest/agent-wrapper/types"
 )
@@ -21,13 +22,13 @@ func main() {
 	}
 
 	orch := agentwrapper.NewOrchestrator(agent,
-		agentwrapper.WithApprovalHandler(func(ctx context.Context, call agentwrapper.ToolCall) (*agentwrapper.Decision, error) {
+		agentwrapper.WithApprovalHandler(func(ctx context.Context, call harness.ToolCall) (*harness.Decision, error) {
 			fmt.Printf("\n[tool] %s(%s)\n", call.Name, string(call.Input))
 			switch call.Name {
 			case "read", "ls", "grep", "glob", "view":
-				return &agentwrapper.Decision{Action: agentwrapper.ActionAllow}, nil
+				return &harness.Decision{Action: harness.ActionAllow}, nil
 			default:
-				return &agentwrapper.Decision{Action: agentwrapper.ActionDeny, Reason: "write tools blocked"}, nil
+				return &harness.Decision{Action: harness.ActionDeny, Reason: "write tools blocked"}, nil
 			}
 		}),
 	)

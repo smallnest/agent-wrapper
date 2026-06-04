@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -11,9 +12,9 @@ import (
 // budget control, and context-length retry with compression.
 type Orchestrator struct {
 	agent      Agent
-	approval   ApprovalHandler
-	budget     BudgetHandler
-	compressor ContextCompressor
+	approval   harness.ApprovalHandler
+	budget     harness.BudgetHandler
+	compressor harness.ContextCompressor
 	maxRetries int
 }
 
@@ -21,18 +22,18 @@ type Orchestrator struct {
 type OrchestratorOption func(*Orchestrator)
 
 // WithApprovalHandler sets the tool approval handler.
-func WithApprovalHandler(h ApprovalHandler) OrchestratorOption {
+func WithApprovalHandler(h harness.ApprovalHandler) OrchestratorOption {
 	return func(o *Orchestrator) { o.approval = h }
 }
 
 // WithBudgetHandler sets the budget handler called after each turn.
-func WithBudgetHandler(h BudgetHandler) OrchestratorOption {
+func WithBudgetHandler(h harness.BudgetHandler) OrchestratorOption {
 	return func(o *Orchestrator) { o.budget = h }
 }
 
 // WithContextCompressor sets the compressor used when retrying after
 // a context-length error.
-func WithContextCompressor(c ContextCompressor) OrchestratorOption {
+func WithContextCompressor(c harness.ContextCompressor) OrchestratorOption {
 	return func(o *Orchestrator) { o.compressor = c }
 }
 
@@ -49,7 +50,7 @@ func WithMaxRetries(n int) OrchestratorOption {
 func NewOrchestrator(agent Agent, opts ...OrchestratorOption) *Orchestrator {
 	o := &Orchestrator{
 		agent:      agent,
-		compressor: NewChainedCompressor(NewSlidingWindowCompressor(20), NewSummaryCompressor(20, nil)),
+		compressor: harness.NewChainedCompressor(harness.NewSlidingWindowCompressor(20), harness.NewSummaryCompressor(20, nil)),
 		maxRetries: 3,
 	}
 	for _, opt := range opts {
@@ -95,7 +96,7 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 			case types.EventToolCall:
 				decision := o.decideApproval(ctx, evt)
 				switch decision.Action {
-				case ActionDeny:
+				case harness.ActionDeny:
 					reason := decision.Reason
 					if reason == "" {
 						reason = "denied"
@@ -108,7 +109,7 @@ func (o *Orchestrator) Run(ctx context.Context, input types.RunInput) (<-chan ty
 						ToolResultError:  true,
 					})
 
-				case ActionAbort:
+				case harness.ActionAbort:
 					forward(types.Event{
 						Type:       types.EventTurnEnd,
 						TurnNumber: turnNumber,
@@ -213,7 +214,7 @@ func (o *Orchestrator) runAgentWithRetry(
 			return eventCh, nil
 		}
 
-		if !IsContextLengthExceeded(err) || attempt >= o.maxRetries {
+		if !harness.IsContextLengthExceeded(err) || attempt >= o.maxRetries {
 			return nil, err
 		}
 
@@ -224,20 +225,20 @@ func (o *Orchestrator) runAgentWithRetry(
 	}
 }
 
-func (o *Orchestrator) decideApproval(ctx context.Context, evt types.Event) *Decision {
+func (o *Orchestrator) decideApproval(ctx context.Context, evt types.Event) *harness.Decision {
 	if o.approval == nil {
-		return &Decision{Action: ActionAllow}
+		return &harness.Decision{Action: harness.ActionAllow}
 	}
-	dec, err := o.approval(ctx, ToolCall{
+	dec, err := o.approval(ctx, harness.ToolCall{
 		ID:    evt.ToolCallID,
 		Name:  evt.ToolName,
 		Input: evt.ToolInput,
 	})
 	if err != nil {
-		return &Decision{Action: ActionDeny, Reason: err.Error()}
+		return &harness.Decision{Action: harness.ActionDeny, Reason: err.Error()}
 	}
 	if dec == nil {
-		return &Decision{Action: ActionAllow}
+		return &harness.Decision{Action: harness.ActionAllow}
 	}
 	return dec
 }

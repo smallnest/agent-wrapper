@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	agentwrapper "github.com/smallnest/agent-wrapper"
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -178,7 +179,7 @@ exit 1
 	found := false
 	for evt := range events {
 		if evt.Type == types.EventError {
-			if _, ok := evt.Error.(*agentwrapper.ContextLengthExceededError); ok {
+			if _, ok := evt.Error.(*harness.ContextLengthExceededError); ok {
 				found = true
 			}
 		}

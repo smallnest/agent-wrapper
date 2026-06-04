@@ -1,4 +1,4 @@
-package agentwrapper
+package harness
 
 import (
 	"fmt"

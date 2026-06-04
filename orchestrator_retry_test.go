@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/smallnest/agent-wrapper/harness"
 	"github.com/smallnest/agent-wrapper/types"
 )
 
@@ -50,7 +51,7 @@ func TestRetryExhaustion(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error after retry exhaustion")
 	}
-	if !IsContextLengthExceeded(err) {
+	if !harness.IsContextLengthExceeded(err) {
 		t.Errorf("expected ContextLengthExceededError, got %T: %v", err, err)
 	}
 	if retryAgent.Runs() != 4 {
@@ -72,7 +73,7 @@ func TestRetryNonContextErrorPassthrough(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if IsContextLengthExceeded(err) {
+	if harness.IsContextLengthExceeded(err) {
 		t.Error("expected non-context error to pass through unwrapped")
 	}
 	if plainAgent.Runs() != 1 {
@@ -203,7 +204,7 @@ func (a *retryingAgent) Run(ctx context.Context, _ types.RunInput) (<-chan types
 	a.mu.Unlock()
 
 	if run < a.numErrors {
-		return nil, &ContextLengthExceededError{Err: errors.New(a.errMsg)}
+		return nil, &harness.ContextLengthExceededError{Err: errors.New(a.errMsg)}
 	}
 
 	ch := make(chan types.Event, len(a.events)+1)
